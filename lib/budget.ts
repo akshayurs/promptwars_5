@@ -1,4 +1,4 @@
-import { MILESTONE_PHASES } from "@/lib/constants";
+import { LIMITS, MILESTONE_PHASES } from "@/lib/constants";
 import type { BudgetLine, Milestone, Vendor } from "@/lib/schema";
 
 export type BudgetStatus = {
@@ -56,3 +56,27 @@ export const groupMilestonesByPhase = (
       .filter((milestone) => milestone.phase === phase)
       .toSorted((a, b) => b.daysBeforeEvent - a.daysBeforeEvent),
   })).filter((group) => group.milestones.length > 0);
+
+export const toggleMilestone = (timeline: readonly Milestone[], id: string): Milestone[] =>
+  timeline.map((milestone) =>
+    milestone.id === id ? { ...milestone, done: !milestone.done } : milestone,
+  );
+
+export type MilestoneProgress = { done: number; total: number; ratio: number };
+
+export const milestoneProgress = (timeline: readonly Milestone[]): MilestoneProgress => {
+  const done = timeline.filter((milestone) => milestone.done).length;
+  return { done, total: timeline.length, ratio: timeline.length > 0 ? done / timeline.length : 0 };
+};
+
+/** The earliest-due milestone that is still open, or null when everything is done. */
+export const nextMilestone = (timeline: readonly Milestone[]): Milestone | null =>
+  timeline
+    .filter((milestone) => !milestone.done)
+    .toSorted((a, b) => b.daysBeforeEvent - a.daysBeforeEvent)[0] ?? null;
+
+export const addBudgetLine = (lines: readonly BudgetLine[], line: BudgetLine): BudgetLine[] =>
+  lines.length >= LIMITS.budgetLines.max ? [...lines] : [...lines, line];
+
+export const removeBudgetLine = (lines: readonly BudgetLine[], id: string): BudgetLine[] =>
+  lines.length <= LIMITS.budgetLines.min ? [...lines] : lines.filter((line) => line.id !== id);

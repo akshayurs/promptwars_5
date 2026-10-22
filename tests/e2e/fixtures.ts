@@ -8,8 +8,11 @@ export { expect };
 const futureDate = (days = 60): string =>
   new Date(Date.now() + days * DAY_MS).toISOString().slice(0, 10);
 
-export const makeIntake = (overrides: Partial<Intake> = {}): Intake => ({
+type IntakeOverrides = Partial<Omit<Intake, "eventType" | "details">>;
+
+export const makeIntake = (overrides: IntakeOverrides = {}): Intake => ({
   eventType: "wedding",
+  details: { coupleNames: "Asha and Ravi", ceremonyStyle: "Traditional Hindu" },
   eventName: "Asha and Ravi Wedding",
   eventDate: futureDate(),
   guestCount: 150,
@@ -34,6 +37,7 @@ export const makePlan = (summary = "A warm floral celebration with live music.")
       title: "Book the venue",
       phase: "booking",
       daysBeforeEvent: 50,
+      done: false,
       details: "Confirm the hall and pay the deposit.",
     },
     {
@@ -41,6 +45,7 @@ export const makePlan = (summary = "A warm floral celebration with live music.")
       title: "Finalise the guest list",
       phase: "planning",
       daysBeforeEvent: 55,
+      done: false,
       details: "Collect confirmed names from both families.",
     },
     {
@@ -48,6 +53,7 @@ export const makePlan = (summary = "A warm floral celebration with live music.")
       title: "Confirm vendor arrivals",
       phase: "final-prep",
       daysBeforeEvent: 3,
+      done: false,
       details: "Call every vendor with the schedule.",
     },
     {
@@ -55,6 +61,7 @@ export const makePlan = (summary = "A warm floral celebration with live music.")
       title: "Ceremony begins",
       phase: "event-day",
       daysBeforeEvent: 0,
+      done: false,
       details: "Guests are seated and the ceremony starts.",
     },
   ],
@@ -104,7 +111,7 @@ export const makePlan = (summary = "A warm floral celebration with live music.")
 });
 
 export const makeWorkspace = (overrides: Partial<StoredWorkspace> = {}): StoredWorkspace => ({
-  version: 1,
+  version: 2,
   intake: makeIntake(),
   plan: makePlan(),
   previousPlan: null,
@@ -147,6 +154,10 @@ export const mockApi = async (
 
 export const fillIntake = async (page: Page, intake: Intake = makeIntake()): Promise<void> => {
   await page.getByLabel("Event name").fill(intake.eventName);
+  if (intake.eventType === "wedding") {
+    await page.getByLabel("Couple's names").fill(intake.details.coupleNames);
+    await page.getByLabel("Ceremony style").fill(intake.details.ceremonyStyle);
+  }
   await page.getByLabel("Event date").fill(intake.eventDate);
   await page.getByLabel("Guest count").fill(String(intake.guestCount));
   await page.getByLabel("Total budget").fill(String(intake.totalBudget));

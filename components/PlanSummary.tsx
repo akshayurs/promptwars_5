@@ -5,12 +5,8 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 
 import { BudgetTable } from "@/components/BudgetTable";
 import { IdeasList } from "@/components/IdeasList";
-import {
-  EmptyWorkspace,
-  EventFacts,
-  LoadingNotice,
-  useHeadingFocus,
-} from "@/components/PlanWorkspace";
+import { EventFacts } from "@/components/EventFacts";
+import { EmptyWorkspace, LoadingNotice, useHeadingFocus } from "@/components/PlanWorkspace";
 import { Timeline } from "@/components/Timeline";
 import { useWorkspace } from "@/components/useWorkspace";
 import { VendorChecklist } from "@/components/VendorChecklist";

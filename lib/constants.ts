@@ -1,5 +1,6 @@
 export const EVENT_TYPES = ["wedding", "birthday", "community"] as const;
 export const CURRENCIES = ["INR", "USD", "EUR", "GBP"] as const;
+export const ADMISSION_TYPES = ["free", "ticketed"] as const;
 export const MILESTONE_PHASES = ["planning", "booking", "final-prep", "event-day"] as const;
 
 export const LIMITS = {
@@ -7,6 +8,8 @@ export const LIMITS = {
   mediumText: 200,
   longText: 500,
   summaryText: 600,
+  minAge: 1,
+  maxAge: 120,
   minGuests: 1,
   maxGuests: 100_000,
   maxBudget: 1_000_000_000,
@@ -28,5 +31,6 @@ export const API = {
   geminiThinkingBudget: 512,
 } as const;
 
-export const STORAGE_KEY = "eventcraft.plan.v1";
+export const STORAGE_KEY = "eventcraft.plan.v2";
 export const DAY_MS = 86_400_000;
+export const DUE_SOON_DAYS = 7;

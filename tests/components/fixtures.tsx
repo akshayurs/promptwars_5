@@ -1,13 +1,23 @@
 import { DAY_MS, STORAGE_KEY } from "@/lib/constants";
-import { StoredWorkspaceSchema, type Intake, type Plan, type StoredWorkspace } from "@/lib/schema";
+import {
+  StoredWorkspaceSchema,
+  type EventDetails,
+  type EventType,
+  type Intake,
+  type Plan,
+  type StoredWorkspace,
+} from "@/lib/schema";
 
 const FUTURE_DAYS = 60;
 
 export const futureDate = (days: number = FUTURE_DAYS): string =>
   new Date(Date.now() + days * DAY_MS).toISOString().slice(0, 10);
 
-export const makeIntake = (overrides: Partial<Intake> = {}): Intake => ({
+type IntakeOverrides = Partial<Omit<Intake, "eventType" | "details">>;
+
+export const makeIntake = (overrides: IntakeOverrides = {}): Intake => ({
   eventType: "wedding",
+  details: { coupleNames: "Asha and Ravi", ceremonyStyle: "Traditional Hindu" },
   eventName: "Asha & Ravi Wedding",
   eventDate: futureDate(),
   guestCount: 150,
@@ -18,6 +28,25 @@ export const makeIntake = (overrides: Partial<Intake> = {}): Intake => ({
   mustHaves: "Live music",
   ...overrides,
 });
+
+const DETAILS_BY_TYPE = {
+  wedding: { coupleNames: "Asha and Ravi", ceremonyStyle: "Traditional Hindu" },
+  birthday: { honoreeName: "Aarav", honoreeAge: 7 },
+  community: { admission: "free", needsPermit: true },
+} as const satisfies Record<EventType, EventDetails>;
+
+/** Builds an intake of the given event type with matching type-specific details. */
+export const makeIntakeFor = (eventType: EventType, overrides: IntakeOverrides = {}): Intake => {
+  const base = makeIntake(overrides);
+  switch (eventType) {
+    case "wedding":
+      return { ...base, eventType, details: DETAILS_BY_TYPE.wedding };
+    case "birthday":
+      return { ...base, eventType, details: DETAILS_BY_TYPE.birthday };
+    case "community":
+      return { ...base, eventType, details: DETAILS_BY_TYPE.community };
+  }
+};
 
 export const makePlan = (overrides: Partial<Plan> = {}): Plan => ({
   summary: "A warm floral celebration with live music.",
@@ -32,6 +61,7 @@ export const makePlan = (overrides: Partial<Plan> = {}): Plan => ({
       title: "Set the guest list",
       phase: "planning",
       daysBeforeEvent: 120,
+      done: false,
       details: "Finalise names with both families",
     },
     {
@@ -39,6 +69,7 @@ export const makePlan = (overrides: Partial<Plan> = {}): Plan => ({
       title: "Book the venue",
       phase: "booking",
       daysBeforeEvent: 90,
+      done: false,
       details: "Pay the deposit",
     },
     {
@@ -46,6 +77,7 @@ export const makePlan = (overrides: Partial<Plan> = {}): Plan => ({
       title: "Confirm headcount",
       phase: "final-prep",
       daysBeforeEvent: 7,
+      done: false,
       details: "Share the number with caterers",
     },
     {
@@ -53,6 +85,7 @@ export const makePlan = (overrides: Partial<Plan> = {}): Plan => ({
       title: "Celebrate",
       phase: "event-day",
       daysBeforeEvent: 0,
+      done: false,
       details: "Enjoy the day",
     },
   ],
@@ -103,7 +136,7 @@ export const makePlan = (overrides: Partial<Plan> = {}): Plan => ({
 });
 
 export const makeWorkspace = (overrides: Partial<StoredWorkspace> = {}): StoredWorkspace => ({
-  version: 1,
+  version: 2,
   intake: makeIntake(),
   plan: makePlan(),
   previousPlan: null,

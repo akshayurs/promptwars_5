@@ -44,7 +44,7 @@ test.describe("accessibility", () => {
   test("over-budget workspace has no axe violations", async ({ page }) => {
     await seedWorkspace(page, makeWorkspace());
     await page.goto("/plan");
-    await page.getByLabel("Venue").fill("900000");
+    await page.getByRole("spinbutton", { name: /^Venue amount/ }).fill("900000");
     await expect(page.getByText("Over budget", { exact: true })).toBeVisible();
     await expectNoViolations(page);
   });

@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
   type ChangeEvent,
   type ReactElement,
+  type ReactNode,
   type RefObject,
 } from "react";
 
@@ -15,15 +16,23 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { requestPlan, type FieldIssues } from "@/lib/client";
-import { CURRENCIES, EVENT_TYPES, LIMITS } from "@/lib/constants";
+import { ADMISSION_TYPES, CURRENCIES, EVENT_TYPES, LIMITS } from "@/lib/constants";
 import { todayIso } from "@/lib/format";
-import { IntakeSchema, type Intake } from "@/lib/schema";
+import { IntakeSchema, type EventType, type Intake } from "@/lib/schema";
 import { createWorkspace } from "@/lib/workspace";
 import { workspaceStore } from "@/lib/workspaceStore";
 
-type FormValues = Record<keyof Intake, string>;
-type FieldKey = keyof FormValues;
+type CommonKey = Exclude<keyof Intake, "details">;
+type FormValues = Record<CommonKey, string>;
 type ControlEvent = ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>;
+type Admission = (typeof ADMISSION_TYPES)[number];
+
+type DetailsValues = {
+  wedding: { coupleNames: string; ceremonyStyle: string };
+  birthday: { honoreeName: string; honoreeAge: string };
+  community: { admission: Admission; needsPermit: boolean };
+};
+type DetailsUpdate = <T extends EventType>(type: T, patch: Partial<DetailsValues[T]>) => void;
 
 const EMPTY: FormValues = {
   eventType: "wedding",
@@ -37,29 +46,59 @@ const EMPTY: FormValues = {
   mustHaves: "",
 };
 
-const EVENT_LABELS: Record<Intake["eventType"], string> = {
+const EMPTY_DETAILS: DetailsValues = {
+  wedding: { coupleNames: "", ceremonyStyle: "" },
+  birthday: { honoreeName: "", honoreeAge: "" },
+  community: { admission: "free", needsPermit: false },
+};
+
+const EVENT_LABELS: Record<EventType, string> = {
   wedding: "Wedding",
   birthday: "Birthday",
   community: "Community event",
 };
 
-const toCandidate = (values: FormValues): unknown => ({
+const ADMISSION_LABELS: Record<Admission, string> = { free: "Free", ticketed: "Ticketed" };
+
+const toEventType = (value: string): EventType =>
+  EVENT_TYPES.find((type) => type === value) ?? "wedding";
+
+const toAdmission = (value: string): Admission =>
+  ADMISSION_TYPES.find((type) => type === value) ?? "free";
+
+const detailsCandidate = (type: EventType, details: DetailsValues): unknown => {
+  switch (type) {
+    case "wedding":
+      return details.wedding;
+    case "birthday":
+      return { ...details.birthday, honoreeAge: Number(details.birthday.honoreeAge) };
+    case "community":
+      return details.community;
+  }
+};
+
+const toCandidate = (values: FormValues, details: DetailsValues): unknown => ({
   ...values,
   guestCount: Number(values.guestCount),
   totalBudget: Number(values.totalBudget),
+  details: detailsCandidate(toEventType(values.eventType), details),
 });
+
+// Details issues keep their nested key ("details.honoreeAge") so they land on the inner field.
+const issueKey = (path: readonly PropertyKey[]): string =>
+  path[0] === "details" ? path.slice(0, 2).map(String).join(".") : String(path[0]);
 
 const firstPathIssues = (
   issues: ReadonlyArray<{ path: PropertyKey[]; message: string }>,
-): FieldIssues => Object.fromEntries(issues.map((issue) => [String(issue.path[0]), issue.message]));
+): FieldIssues => Object.fromEntries(issues.map((issue) => [issueKey(issue.path), issue.message]));
 
 type FieldsProps = {
   values: FormValues;
   issues: FieldIssues;
-  onChange: (key: FieldKey) => (event: ControlEvent) => void;
+  onChange: (key: CommonKey) => (event: ControlEvent) => void;
 };
 
-const errorFor = (issues: FieldIssues, key: FieldKey): { error: string } | Record<string, never> =>
+const errorFor = (issues: FieldIssues, key: string): { error: string } | Record<string, never> =>
   issues[key] ? { error: issues[key] } : {};
 
 const EventTypeChoice = ({ values, onChange }: FieldsProps): ReactElement => (
@@ -84,6 +123,165 @@ const EventTypeChoice = ({ values, onChange }: FieldsProps): ReactElement => (
     </div>
   </fieldset>
 );
+
+type DetailsProps<T extends EventType> = {
+  values: DetailsValues[T];
+  issues: FieldIssues;
+  onChange: (patch: Partial<DetailsValues[T]>) => void;
+};
+
+const DetailsFieldset = ({
+  legend,
+  children,
+}: {
+  legend: string;
+  children: ReactNode;
+}): ReactElement => (
+  <fieldset className="flex flex-col gap-4 rounded-md border border-line p-4">
+    <legend className="px-1 text-sm font-medium">{legend}</legend>
+    {children}
+  </fieldset>
+);
+
+const WeddingFields = ({ values, issues, onChange }: DetailsProps<"wedding">): ReactElement => (
+  <DetailsFieldset legend="Wedding details">
+    <TextField
+      id="coupleNames"
+      label="Couple's names"
+      value={values.coupleNames}
+      onChange={(event) => {
+        onChange({ coupleNames: event.target.value });
+      }}
+      maxLength={LIMITS.shortText}
+      required
+      {...errorFor(issues, "details.coupleNames")}
+    />
+    <TextField
+      id="ceremonyStyle"
+      label="Ceremony style"
+      hint="For example traditional Hindu, church, civil or a blend of cultures."
+      value={values.ceremonyStyle}
+      onChange={(event) => {
+        onChange({ ceremonyStyle: event.target.value });
+      }}
+      maxLength={LIMITS.shortText}
+      required
+      {...errorFor(issues, "details.ceremonyStyle")}
+    />
+  </DetailsFieldset>
+);
+
+const BirthdayFields = ({ values, issues, onChange }: DetailsProps<"birthday">): ReactElement => (
+  <DetailsFieldset legend="Birthday details">
+    <TextField
+      id="honoreeName"
+      label="Guest of honour's name"
+      value={values.honoreeName}
+      onChange={(event) => {
+        onChange({ honoreeName: event.target.value });
+      }}
+      maxLength={LIMITS.shortText}
+      required
+      {...errorFor(issues, "details.honoreeName")}
+    />
+    <TextField
+      id="honoreeAge"
+      label="Age they are turning"
+      type="number"
+      inputMode="numeric"
+      min={LIMITS.minAge}
+      max={LIMITS.maxAge}
+      value={values.honoreeAge}
+      onChange={(event) => {
+        onChange({ honoreeAge: event.target.value });
+      }}
+      required
+      {...errorFor(issues, "details.honoreeAge")}
+    />
+  </DetailsFieldset>
+);
+
+const CommunityFields = ({ values, issues, onChange }: DetailsProps<"community">): ReactElement => (
+  <DetailsFieldset legend="Community event details">
+    <SelectField
+      id="admission"
+      label="Admission"
+      value={values.admission}
+      onChange={(event) => {
+        onChange({ admission: toAdmission(event.target.value) });
+      }}
+      options={ADMISSION_TYPES.map((type) => ({ value: type, label: ADMISSION_LABELS[type] }))}
+      {...errorFor(issues, "details.admission")}
+    />
+    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
+      <input
+        id="needsPermit"
+        type="checkbox"
+        className="size-6 shrink-0 rounded border border-control accent-brand"
+        checked={values.needsPermit}
+        onChange={(event) => {
+          onChange({ needsPermit: event.target.checked });
+        }}
+      />
+      This event needs a public permit
+    </label>
+  </DetailsFieldset>
+);
+
+type EventDetailsProps = {
+  type: EventType;
+  details: DetailsValues;
+  issues: FieldIssues;
+  onDetail: DetailsUpdate;
+};
+
+const EventDetailsFields = ({
+  type,
+  details,
+  issues,
+  onDetail,
+}: EventDetailsProps): ReactElement => {
+  switch (type) {
+    case "wedding":
+      return (
+        <WeddingFields
+          values={details.wedding}
+          issues={issues}
+          onChange={(patch) => {
+            onDetail("wedding", patch);
+          }}
+        />
+      );
+    case "birthday":
+      return (
+        <BirthdayFields
+          values={details.birthday}
+          issues={issues}
+          onChange={(patch) => {
+            onDetail("birthday", patch);
+          }}
+        />
+      );
+    case "community":
+      return (
+        <CommunityFields
+          values={details.community}
+          issues={issues}
+          onChange={(patch) => {
+            onDetail("community", patch);
+          }}
+        />
+      );
+  }
+};
+
+const useDetailsState = (): [DetailsValues, DetailsUpdate] => {
+  const [details, setDetails] = useState<DetailsValues>(EMPTY_DETAILS);
+  const update: DetailsUpdate = (type, patch) => {
+    setDetails((current) => ({ ...current, [type]: { ...current[type], ...patch } }));
+  };
+  return [details, update];
+};
 
 const noSubscription = (): (() => void) => () => undefined;
 const serverToday = (): undefined => undefined;
@@ -187,7 +385,7 @@ type Submission = {
   message: string | null;
   busy: boolean;
   alertRef: RefObject<HTMLDivElement | null>;
-  submit: (values: FormValues) => Promise<void>;
+  submit: (candidate: unknown) => Promise<void>;
 };
 
 const useFocusOnFailure = (failures: number): RefObject<HTMLDivElement | null> => {
@@ -224,9 +422,9 @@ const useIntakeSubmission = (): Submission => {
     setFailures((count) => count + 1);
   };
 
-  const submit = async (values: FormValues): Promise<void> => {
+  const submit = async (candidate: unknown): Promise<void> => {
     if (busy) return;
-    const parsed = IntakeSchema.safeParse(toCandidate(values));
+    const parsed = IntakeSchema.safeParse(candidate);
     if (!parsed.success) {
       fail("Please correct the highlighted fields.", firstPathIssues(parsed.error.issues));
       return;
@@ -254,9 +452,10 @@ const useIntakeSubmission = (): Submission => {
 
 export const IntakeForm = (): ReactElement => {
   const [values, setValues] = useState<FormValues>(EMPTY);
+  const [details, updateDetails] = useDetailsState();
   const { issues, message, busy, alertRef, submit } = useIntakeSubmission();
 
-  const onChange = (key: FieldKey) => (event: ControlEvent) => {
+  const onChange = (key: CommonKey) => (event: ControlEvent) => {
     const next = event.target.value;
     setValues((current) => ({ ...current, [key]: next }));
   };
@@ -266,7 +465,7 @@ export const IntakeForm = (): ReactElement => {
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        void submit(values);
+        void submit(toCandidate(values, details));
       }}
       noValidate
       className="flex flex-col gap-5"
@@ -287,6 +486,12 @@ export const IntakeForm = (): ReactElement => {
         maxLength={LIMITS.shortText}
         required
         {...errorFor(issues, "eventName")}
+      />
+      <EventDetailsFields
+        type={toEventType(values.eventType)}
+        details={details}
+        issues={issues}
+        onDetail={updateDetails}
       />
       <LogisticsFields {...fields} />
       <StoryFields {...fields} />

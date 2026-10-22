@@ -27,6 +27,12 @@ describe("toPlan", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("marks every milestone as not done", () => {
+    const plan = toPlan(makeGeneratedPlan(), counterIds());
+    expect(plan.timeline).toHaveLength(4);
+    expect(plan.timeline.every((m) => !m.done)).toBe(true);
+  });
+
   it("uses random uuids by default producing a schema-valid plan", () => {
     expect(PlanSchema.safeParse(toPlan(makeGeneratedPlan())).success).toBe(true);
   });
@@ -66,6 +72,43 @@ describe("mergeRefinedPlan", () => {
     generated.vendors = generated.vendors.map((vendor) => ({ ...vendor, category: "caterer" }));
     const merged = mergeRefinedPlan(previous, generated, counterIds());
     expect(merged.vendors.map((v) => v.booked)).toEqual([true, true, false]);
+  });
+
+  it("carries milestone completion by title, case-insensitively and trimmed", () => {
+    const previous = makePlan();
+    previous.timeline[0] = { ...previous.timeline[0]!, title: "Book venue", done: true };
+    previous.timeline[1] = { ...previous.timeline[1]!, title: "Pick theme", done: false };
+    const generated = makeGeneratedPlan();
+    generated.timeline[0] = { ...generated.timeline[0]!, title: "  BOOK venue " };
+    const merged = mergeRefinedPlan(previous, generated, counterIds());
+    expect(merged.timeline.map((m) => m.done)).toEqual([true, false, false, false]);
+  });
+
+  it("carries each completion once when titles repeat", () => {
+    const previous = makePlan();
+    previous.timeline[0] = { ...previous.timeline[0]!, title: "Book venue", done: true };
+    const generated = makeGeneratedPlan();
+    generated.timeline = generated.timeline.map((m) => ({ ...m, title: "book venue" }));
+    const merged = mergeRefinedPlan(previous, generated, counterIds());
+    expect(merged.timeline.map((m) => m.done)).toEqual([true, false, false, false]);
+  });
+
+  it("carries two completions of the same title to two matches", () => {
+    const previous = makePlan();
+    previous.timeline = previous.timeline.map((m, i) => ({ ...m, title: "Call", done: i < 2 }));
+    const generated = makeGeneratedPlan();
+    generated.timeline = generated.timeline.map((m) => ({ ...m, title: "call" }));
+    const merged = mergeRefinedPlan(previous, generated, counterIds());
+    expect(merged.timeline.map((m) => m.done)).toEqual([true, true, false, false]);
+  });
+
+  it("does not carry completion when the title changes", () => {
+    const previous = makePlan();
+    previous.timeline = previous.timeline.map((m) => ({ ...m, done: true }));
+    const generated = makeGeneratedPlan();
+    generated.timeline = generated.timeline.map((m) => ({ ...m, title: `${m.title} (revised)` }));
+    const merged = mergeRefinedPlan(previous, generated, counterIds());
+    expect(merged.timeline.every((m) => !m.done)).toBe(true);
   });
 
   it("defaults to random ids", () => {

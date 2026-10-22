@@ -1,7 +1,36 @@
-import type { GeneratedPlan, Intake, Plan, StoredWorkspace } from "@/lib/schema";
+import type {
+  EventDetails,
+  EventType,
+  GeneratedPlan,
+  Intake,
+  Plan,
+  StoredWorkspace,
+} from "@/lib/schema";
 
-export const makeIntake = (overrides: Partial<Intake> = {}): Intake => ({
+type IntakeOverrides = Partial<Omit<Intake, "eventType" | "details">>;
+
+const DETAILS_BY_TYPE = {
+  wedding: { coupleNames: "Asha and Ravi", ceremonyStyle: "Traditional Hindu" },
+  birthday: { honoreeName: "Aarav", honoreeAge: 7 },
+  community: { admission: "free", needsPermit: true },
+} as const satisfies Record<EventType, EventDetails>;
+
+/** Builds an intake of the given event type with matching type-specific details. */
+export const makeIntakeFor = (eventType: EventType, overrides: IntakeOverrides = {}): Intake => {
+  const base = makeIntake(overrides);
+  switch (eventType) {
+    case "wedding":
+      return { ...base, eventType, details: DETAILS_BY_TYPE.wedding };
+    case "birthday":
+      return { ...base, eventType, details: DETAILS_BY_TYPE.birthday };
+    case "community":
+      return { ...base, eventType, details: DETAILS_BY_TYPE.community };
+  }
+};
+
+export const makeIntake = (overrides: IntakeOverrides = {}): Intake => ({
   eventType: "wedding",
+  details: { coupleNames: "Asha and Ravi", ceremonyStyle: "Traditional Hindu" },
   eventName: "Asha and Ravi",
   eventDate: "2030-01-15",
   guestCount: 120,
@@ -49,7 +78,7 @@ export const makePlan = (overrides: Partial<Plan> = {}): Plan => {
   return {
     summary: generated.summary,
     budget: generated.budget.map((line) => ({ ...line, id: crypto.randomUUID() })),
-    timeline: generated.timeline.map((item) => ({ ...item, id: crypto.randomUUID() })),
+    timeline: generated.timeline.map((item) => ({ ...item, id: crypto.randomUUID(), done: false })),
     vendors: generated.vendors.map((vendor) => ({
       ...vendor,
       id: crypto.randomUUID(),
@@ -61,7 +90,7 @@ export const makePlan = (overrides: Partial<Plan> = {}): Plan => {
 };
 
 export const makeWorkspace = (overrides: Partial<StoredWorkspace> = {}): StoredWorkspace => ({
-  version: 1,
+  version: 2,
   intake: makeIntake(),
   plan: makePlan(),
   previousPlan: null,

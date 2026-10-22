@@ -4,14 +4,15 @@ import * as Tabs from "@radix-ui/react-tabs";
 import Link from "next/link";
 import { useEffect, useRef, type ReactElement, type RefObject } from "react";
 
-import { BudgetTable } from "@/components/BudgetTable";
+import { BudgetTable, type BudgetTableProps } from "@/components/BudgetTable";
 import { IdeasList } from "@/components/IdeasList";
+import { NextUpCard } from "@/components/NextUpCard";
 import { RefinePanel } from "@/components/RefinePanel";
 import { Timeline } from "@/components/Timeline";
 import { useWorkspace } from "@/components/useWorkspace";
 import { VendorChecklist } from "@/components/VendorChecklist";
+import { EventFacts } from "@/components/EventFacts";
 import { Alert } from "@/components/ui/Alert";
-import { daysUntil, formatDate, formatMoney } from "@/lib/format";
 import type { StoredWorkspace } from "@/lib/schema";
 import type { WorkspaceAction } from "@/lib/workspace";
 
@@ -25,12 +26,6 @@ const TABS = [
 const TRIGGER =
   "min-h-11 rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-soft data-[state=active]:bg-brand data-[state=active]:text-surface-raised data-[state=active]:hover:bg-brand";
 
-const countdownLabel = (days: number): string => {
-  if (days < 0) return "";
-  if (days === 0) return " (today)";
-  return days === 1 ? " (tomorrow)" : ` (${days} days away)`;
-};
-
 /** Moves focus to the page heading once on mount so route changes are announced. */
 export const useHeadingFocus = (): RefObject<HTMLHeadingElement | null> => {
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -38,27 +33,6 @@ export const useHeadingFocus = (): RefObject<HTMLHeadingElement | null> => {
     headingRef.current?.focus();
   }, []);
   return headingRef;
-};
-
-export const EventFacts = ({ workspace }: { workspace: StoredWorkspace }): ReactElement => {
-  const { intake } = workspace;
-  const countdown = countdownLabel(daysUntil(intake.eventDate));
-  const facts = [
-    ["Date", formatDate(intake.eventDate) + countdown],
-    ["Guests", String(intake.guestCount)],
-    ["Budget", formatMoney(intake.totalBudget, intake.currency)],
-    ["Location", intake.location],
-  ] as const;
-  return (
-    <dl className="grid gap-3 text-sm sm:grid-cols-4">
-      {facts.map(([term, detail]) => (
-        <div key={term}>
-          <dt className="text-ink-muted">{term}</dt>
-          <dd>{detail}</dd>
-        </div>
-      ))}
-    </dl>
-  );
 };
 
 export const EmptyWorkspace = ({ title = "Workspace" }: { title?: string }): ReactElement => (
@@ -85,6 +59,27 @@ export const LoadingNotice = ({ title = "Workspace" }: { title?: string }): Reac
   </div>
 );
 
+type Dispatch = (action: WorkspaceAction) => void;
+
+const budgetHandlers = (
+  dispatch: Dispatch,
+): Required<
+  Pick<BudgetTableProps, "onAmountChange" | "onAddLine" | "onRemoveLine" | "onTotalChange">
+> => ({
+  onAmountChange: (id, amount) => {
+    dispatch({ type: "setAmount", id, amount });
+  },
+  onAddLine: (line) => {
+    dispatch({ type: "addLine", line });
+  },
+  onRemoveLine: (id) => {
+    dispatch({ type: "removeLine", id });
+  },
+  onTotalChange: (amount) => {
+    dispatch({ type: "setTotalBudget", amount });
+  },
+});
+
 const PlanTabs = ({
   workspace,
   dispatch,
@@ -110,13 +105,17 @@ const PlanTabs = ({
           lines={plan.budget}
           totalBudget={intake.totalBudget}
           currency={intake.currency}
-          onAmountChange={(id, amount) => {
-            dispatch({ type: "setAmount", id, amount });
-          }}
+          {...budgetHandlers(dispatch)}
         />
       </Tabs.Content>
       <Tabs.Content value="timeline">
-        <Timeline timeline={plan.timeline} eventDate={intake.eventDate} />
+        <Timeline
+          timeline={plan.timeline}
+          eventDate={intake.eventDate}
+          onToggle={(id) => {
+            dispatch({ type: "toggleMilestone", id });
+          }}
+        />
       </Tabs.Content>
       <Tabs.Content value="vendors">
         <VendorChecklist
@@ -153,6 +152,7 @@ const LoadedWorkspace = ({
           Open printable summary
         </Link>
       </header>
+      <NextUpCard timeline={workspace.plan.timeline} eventDate={workspace.intake.eventDate} />
       <PlanTabs workspace={workspace} dispatch={dispatch} />
       <RefinePanel
         workspace={workspace}

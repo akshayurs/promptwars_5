@@ -1,7 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { Timeline } from "@/components/Timeline";
-import { formatDate, shiftDate } from "@/lib/format";
+import { formatDate, shiftDate, todayIso } from "@/lib/format";
 import type { Milestone } from "@/lib/schema";
 
 import { makePlan } from "./fixtures";
@@ -13,6 +14,7 @@ const milestone = (overrides: Partial<Milestone>): Milestone => ({
   title: "Task",
   phase: "planning",
   daysBeforeEvent: 10,
+  done: false,
   details: "Details",
   ...overrides,
 });
@@ -96,5 +98,92 @@ describe("Timeline", () => {
       <Timeline timeline={[milestone({ details: "Call the florist" })]} eventDate={EVENT_DATE} />,
     );
     expect(screen.getByText("Call the florist")).toBeInTheDocument();
+  });
+
+  it("shows progress from mount with a labelled progress bar", () => {
+    const timeline = [milestone({ done: true }), milestone({}), milestone({})];
+    render(<Timeline timeline={timeline} eventDate={EVENT_DATE} />);
+    expect(screen.getByRole("status")).toHaveTextContent("1 of 3 milestones done");
+    const bar = screen.getByRole("progressbar", { name: "1 of 3 milestones done" });
+    expect(bar).toHaveAttribute("value", "1");
+    expect(bar).toHaveAttribute("max", "3");
+  });
+
+  it("keeps the progress max at least 1 for an empty timeline", () => {
+    render(<Timeline timeline={[]} eventDate={EVENT_DATE} />);
+    expect(screen.getByRole("status")).toHaveTextContent("0 of 0 milestones done");
+    expect(screen.getByRole("progressbar")).toHaveAttribute("max", "1");
+  });
+});
+
+describe("Timeline interactive mode", () => {
+  it("renders a checkbox per milestone labelled by its title and described by its date", () => {
+    const timeline = [
+      milestone({ title: "Book venue", daysBeforeEvent: 30, done: true }),
+      milestone({ title: "Send invites", daysBeforeEvent: 20 }),
+    ];
+    render(<Timeline timeline={timeline} eventDate={EVENT_DATE} onToggle={vi.fn()} />);
+    const booked = screen.getByRole("checkbox", { name: "Book venue" });
+    expect(booked).toHaveAttribute("aria-checked", "true");
+    expect(booked).toHaveAccessibleDescription(
+      `${formatDate(shiftDate(EVENT_DATE, -30))} · 30 days before`,
+    );
+    expect(screen.getByRole("checkbox", { name: "Send invites" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+  });
+
+  it("calls onToggle with the milestone id", async () => {
+    const onToggle = vi.fn();
+    const target = milestone({ title: "Hire DJ" });
+    render(<Timeline timeline={[target]} eventDate={EVENT_DATE} onToggle={onToggle} />);
+    await userEvent.click(screen.getByRole("checkbox", { name: "Hire DJ" }));
+    expect(onToggle).toHaveBeenCalledExactlyOnceWith(target.id);
+  });
+
+  it("shows visible Done text for completed milestones only", () => {
+    const timeline = [
+      milestone({ title: "Finished", daysBeforeEvent: 40, done: true }),
+      milestone({ title: "Pending", daysBeforeEvent: 30 }),
+    ];
+    render(<Timeline timeline={timeline} eventDate={EVENT_DATE} onToggle={vi.fn()} />);
+    const [finished, pending] = screen.getAllByRole("listitem");
+    expect(within(finished!).getByText("Done")).toBeVisible();
+    expect(within(pending!).queryByText("Done")).not.toBeInTheDocument();
+  });
+
+  it("flags open milestones as Overdue or Due this week relative to today", () => {
+    const eventDate = shiftDate(todayIso(), 10);
+    const timeline = [
+      milestone({ title: "Late", daysBeforeEvent: 12 }),
+      milestone({ title: "Late but done", daysBeforeEvent: 11, done: true }),
+      milestone({ title: "Today", daysBeforeEvent: 10 }),
+      milestone({ title: "Soon", daysBeforeEvent: 3 }),
+      milestone({ title: "Later", daysBeforeEvent: 2 }),
+    ];
+    render(<Timeline timeline={timeline} eventDate={eventDate} onToggle={vi.fn()} />);
+    const item = (title: string) =>
+      screen.getByRole("checkbox", { name: title }).closest("li") as HTMLElement;
+    expect(item("Late")).toHaveTextContent("Overdue");
+    expect(item("Late but done")).not.toHaveTextContent("Overdue");
+    expect(item("Late but done")).toHaveTextContent("Done");
+    expect(item("Today")).toHaveTextContent("Due this week");
+    expect(item("Soon")).toHaveTextContent("Due this week");
+    expect(item("Later")).not.toHaveTextContent(/Overdue|Due this week/);
+  });
+});
+
+describe("Timeline read-only mode", () => {
+  it("has no checkboxes and exposes state as screen-reader text", () => {
+    const timeline = [
+      milestone({ title: "Finished", daysBeforeEvent: 40, done: true }),
+      milestone({ title: "Pending", daysBeforeEvent: 30 }),
+    ];
+    render(<Timeline timeline={timeline} eventDate={EVENT_DATE} />);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText("(done)")).toHaveClass("sr-only");
+    expect(screen.getByText("(open)")).toHaveClass("sr-only");
+    expect(screen.getByText("Done")).toBeInTheDocument();
   });
 });

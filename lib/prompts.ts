@@ -3,13 +3,33 @@ import type { Intake, RefineRequest } from "@/lib/schema";
 
 export type Prompt = { system: string; user: string };
 
-const EVENT_GUIDANCE: Record<Intake["eventType"], string> = {
-  wedding:
-    "Weddings span ceremony and reception, involve families and traditions, and usually need the longest lead times for venue, catering, attire and photography.",
-  birthday:
-    "Birthdays centre on the guest of honour; match the age group, keep logistics light, and weight the budget toward food, entertainment and decor.",
-  community:
-    "Community events serve a broad public: prioritise permits, safety, accessibility, volunteers, sponsors, signage and inclusive programming.",
+type Admission = Extract<Intake, { eventType: "community" }>["details"]["admission"];
+
+const ADMISSION_GUIDANCE: Record<Admission, string> = {
+  free: "Admission is free: plan for unpredictable turnout, crowd flow, and sponsor or donation income rather than ticket revenue.",
+  ticketed:
+    "Admission is ticketed: include a ticketing platform, pricing tiers, sales deadlines and entry check-in in the plan.",
+};
+
+const permitGuidance = (needsPermit: boolean): string =>
+  needsPermit
+    ? "The organiser needs a public permit: the timeline must include a booking-phase milestone to apply for the permit early enough for approval, and the vendor list should cover any permit-related services."
+    : "The organiser reports that no public permit is needed; do not add a permit application milestone.";
+
+// Free-text details are referenced by path, never interpolated: they stay inside the data block.
+const eventGuidance = (intake: Intake): string => {
+  switch (intake.eventType) {
+    case "wedding":
+      return "Weddings span ceremony and reception, involve families and traditions, and usually need the longest lead times for venue, catering, attire and photography. Personalise the plan for the couple named in details.coupleNames and shape the ceremony, rituals, attire, music and vendors around the ceremony style in details.ceremonyStyle.";
+    case "birthday":
+      return `Birthdays centre on the guest of honour named in details.honoreeName, who is turning ${intake.details.honoreeAge}; keep logistics light, weight the budget toward food, entertainment and decor, and choose activities, food and safety measures that suit that age.`;
+    case "community":
+      return [
+        "Community events serve a broad public: prioritise permits, safety, accessibility, volunteers, sponsors, signage and inclusive programming.",
+        ADMISSION_GUIDANCE[intake.details.admission],
+        permitGuidance(intake.details.needsPermit),
+      ].join(" ");
+  }
 };
 
 const SYSTEM_PROMPT = [
@@ -36,7 +56,7 @@ export const buildPlanPrompt = (intake: Intake, today: string): Prompt => ({
   system: SYSTEM_PROMPT,
   user: [
     `Create a complete ${intake.eventType} plan.`,
-    EVENT_GUIDANCE[intake.eventType],
+    eventGuidance(intake),
     intakeBlock(intake, today),
   ].join("\n\n"),
 });
@@ -48,7 +68,7 @@ export const buildRefinePrompt = (
   system: SYSTEM_PROMPT,
   user: [
     `Revise the current ${intake.eventType} plan according to the planner's request below, keeping everything that is not affected by the request.`,
-    EVENT_GUIDANCE[intake.eventType],
+    eventGuidance(intake),
     intakeBlock(intake, today),
     dataBlock("current_plan", plan),
     `<request>\n${escapeTags(instruction)}\n</request>`,

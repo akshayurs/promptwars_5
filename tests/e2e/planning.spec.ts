@@ -85,12 +85,12 @@ test.describe("workspace", () => {
     ).toBeVisible();
 
     await page.getByRole("tab", { name: "Budget" }).click();
-    await page.getByLabel("Venue").fill("900000");
+    await page.getByRole("spinbutton", { name: /^Venue amount/ }).fill("900000");
     await expect(page.getByText("Over budget", { exact: true })).toBeVisible();
 
     await page.reload();
     await expect(page.getByRole("heading", { level: 1, name: intake.eventName })).toBeVisible();
-    await expect(page.getByLabel("Venue")).toHaveValue("900000");
+    await expect(page.getByRole("spinbutton", { name: /^Venue amount/ })).toHaveValue("900000");
     await page.getByRole("tab", { name: "Vendors" }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "1 of 3 vendors booked" }),

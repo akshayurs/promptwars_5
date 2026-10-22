@@ -1,5 +1,5 @@
 import { daysBetween, toIsoDay } from "@/lib/dates";
-import type { GeneratedPlan, Intake, Plan, Vendor } from "@/lib/schema";
+import type { GeneratedPlan, Intake, Milestone, Plan, Vendor } from "@/lib/schema";
 
 type IdFactory = () => string;
 
@@ -11,7 +11,7 @@ const withIds = <T>(items: readonly T[], nextId: IdFactory): Array<T & { id: str
 export const toPlan = (generated: GeneratedPlan, nextId: IdFactory = defaultIds): Plan => ({
   summary: generated.summary,
   budget: withIds(generated.budget, nextId),
-  timeline: withIds(generated.timeline, nextId),
+  timeline: withIds(generated.timeline, nextId).map((milestone) => ({ ...milestone, done: false })),
   vendors: withIds(generated.vendors, nextId).map((vendor) => ({ ...vendor, booked: false })),
   ideas: withIds(generated.ideas, nextId),
 });
@@ -80,13 +80,30 @@ const carryBookings = (previous: readonly Vendor[], next: readonly Vendor[]): Ve
   return next.map((vendor) => ({ ...vendor, booked: takeOne(booked, normalise(vendor.category)) }));
 };
 
+const carryCompletion = (
+  previous: readonly Milestone[],
+  next: readonly Milestone[],
+): Milestone[] => {
+  const done = countBy(
+    previous.filter((milestone) => milestone.done).map((milestone) => normalise(milestone.title)),
+  );
+  return next.map((milestone) => ({
+    ...milestone,
+    done: takeOne(done, normalise(milestone.title)),
+  }));
+};
+
 export const mergeRefinedPlan = (
   previous: Plan,
   generated: GeneratedPlan,
   nextId: IdFactory = defaultIds,
 ): Plan => {
   const fresh = toPlan(generated, nextId);
-  return { ...fresh, vendors: carryBookings(previous.vendors, fresh.vendors) };
+  return {
+    ...fresh,
+    vendors: carryBookings(previous.vendors, fresh.vendors),
+    timeline: carryCompletion(previous.timeline, fresh.timeline),
+  };
 };
 
 export type PlanDiff = { budget: number; timeline: number; vendors: number; ideas: number };

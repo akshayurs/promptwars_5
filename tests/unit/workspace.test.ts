@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { LIMITS } from "@/lib/constants";
+import type { BudgetLine } from "@/lib/schema";
 import { createWorkspace, createWorkspaceReducer, workspaceReducer } from "@/lib/workspace";
 
 import { makeIntake, makePlan, makeWorkspace } from "./fixtures";
@@ -8,11 +10,11 @@ const STAMP = "2031-02-03T04:05:06.000Z";
 const reducer = createWorkspaceReducer(() => STAMP);
 
 describe("createWorkspace", () => {
-  it("builds a version 1 workspace with no previous plan", () => {
+  it("builds a version 2 workspace with no previous plan", () => {
     const intake = makeIntake();
     const plan = makePlan();
     expect(createWorkspace(intake, plan, () => STAMP)).toEqual({
-      version: 1,
+      version: 2,
       intake,
       plan,
       previousPlan: null,
@@ -87,4 +89,88 @@ describe("workspace reducer", () => {
     expect(next?.savedAt).not.toBe(ws.savedAt);
     expect(next?.savedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
+});
+
+const newLine = (index = 0): BudgetLine => ({
+  id: crypto.randomUUID(),
+  category: `Extra ${index}`,
+  amount: 1_000,
+  rationale: "Added by you",
+});
+
+const linesOf = (count: number): BudgetLine[] =>
+  Array.from({ length: count }, (_, index) => newLine(index));
+
+describe("workspace reducer: budget lines", () => {
+  it("addLine appends the line and stamps savedAt", () => {
+    const ws = makeWorkspace();
+    const line = newLine();
+    const next = reducer(ws, { type: "addLine", line });
+    expect(next?.plan.budget).toHaveLength(ws.plan.budget.length + 1);
+    expect(next?.plan.budget.at(-1)).toBe(line);
+    expect(next?.savedAt).toBe(STAMP);
+    expect(ws.plan.budget).toHaveLength(3);
+  });
+
+  it("addLine at the maximum returns a new plan with the same lines", () => {
+    const budget = linesOf(LIMITS.budgetLines.max);
+    const ws = makeWorkspace({ plan: makePlan({ budget }) });
+    const next = reducer(ws, { type: "addLine", line: newLine(99) });
+    expect(next).not.toBe(ws);
+    expect(next?.plan.budget).toEqual(budget);
+    expect(next?.plan.budget).not.toBe(budget);
+  });
+
+  it("removeLine removes the matching line", () => {
+    const budget = linesOf(LIMITS.budgetLines.min + 1);
+    const ws = makeWorkspace({ plan: makePlan({ budget }) });
+    const next = reducer(ws, { type: "removeLine", id: budget[0]!.id });
+    expect(next?.plan.budget).toEqual(budget.slice(1));
+    expect(next?.savedAt).toBe(STAMP);
+    expect(ws.plan.budget).toHaveLength(LIMITS.budgetLines.min + 1);
+  });
+
+  it("removeLine at the minimum keeps every line", () => {
+    const ws = makeWorkspace();
+    expect(ws.plan.budget).toHaveLength(LIMITS.budgetLines.min);
+    const next = reducer(ws, { type: "removeLine", id: ws.plan.budget[0]!.id });
+    expect(next?.plan.budget).toEqual(ws.plan.budget);
+  });
+
+  it("removeLine with an unknown id keeps every line", () => {
+    const budget = linesOf(LIMITS.budgetLines.min + 1);
+    const ws = makeWorkspace({ plan: makePlan({ budget }) });
+    expect(reducer(ws, { type: "removeLine", id: "missing" })?.plan.budget).toEqual(budget);
+  });
+
+  it("budget line actions on null state return null", () => {
+    expect(reducer(null, { type: "addLine", line: newLine() })).toBeNull();
+    expect(reducer(null, { type: "removeLine", id: "x" })).toBeNull();
+    expect(reducer(null, { type: "setTotalBudget", amount: 10 })).toBeNull();
+  });
+});
+
+describe("workspace reducer: setTotalBudget", () => {
+  it("updates intake.totalBudget and stamps savedAt without touching the plan", () => {
+    const ws = makeWorkspace();
+    const next = reducer(ws, { type: "setTotalBudget", amount: 750_000 });
+    expect(next?.intake.totalBudget).toBe(750_000);
+    expect(next?.intake.eventName).toBe(ws.intake.eventName);
+    expect(next?.plan).toBe(ws.plan);
+    expect(next?.savedAt).toBe(STAMP);
+    expect(ws.intake.totalBudget).toBe(500_000);
+  });
+
+  it("accepts the maximum budget exactly", () => {
+    const next = reducer(makeWorkspace(), { type: "setTotalBudget", amount: LIMITS.maxBudget });
+    expect(next?.intake.totalBudget).toBe(LIMITS.maxBudget);
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, LIMITS.maxBudget + 1])(
+    "rejects %s with the same state reference",
+    (amount) => {
+      const ws = makeWorkspace();
+      expect(reducer(ws, { type: "setTotalBudget", amount })).toBe(ws);
+    },
+  );
 });
