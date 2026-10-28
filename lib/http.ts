@@ -1,6 +1,9 @@
+import { addressKey } from "@/lib/clientAddress";
+
 export type RejectionReason =
   | "cross_site"
   | "rate_limited"
+  | "too_many_in_flight"
   | "unsupported_media_type"
   | "body_too_large"
   | "invalid_utf8"
@@ -125,18 +128,38 @@ const lastForwardedHop = (header: string | null): string | undefined =>
     .filter((hop) => hop.length > 0)
     .at(-1);
 
-/** Rate-limit key for the caller: the proxy-appended forwarded hop, then x-real-ip. */
-export const clientKey = (request: Request): string =>
-  lastForwardedHop(request.headers.get("x-forwarded-for")) ??
-  nonEmpty(request.headers.get("x-real-ip")) ??
-  "anonymous";
+/**
+ * Rate-limit key for the caller: the proxy-appended forwarded hop, then x-real-ip, with IPv6
+ * addresses reduced to their /64 network.
+ */
+export const clientKey = (request: Request): string => {
+  const address =
+    lastForwardedHop(request.headers.get("x-forwarded-for")) ??
+    nonEmpty(request.headers.get("x-real-ip"));
+  return address === undefined ? "anonymous" : addressKey(address);
+};
 
 const ALLOWED_FETCH_SITES: ReadonlySet<string> = new Set(["same-origin", "none"]);
+const WEB_SCHEMES: ReadonlySet<string> = new Set(["http", "https"]);
+
+// The origin the browser addressed: the proxy-set forwarded scheme and host, else the request URL.
+const publicOrigin = (request: Request): string | undefined => {
+  const url = new URL(request.url);
+  const scheme =
+    lastForwardedHop(request.headers.get("x-forwarded-proto"))?.toLowerCase() ??
+    url.protocol.slice(0, -1);
+  const host =
+    lastForwardedHop(request.headers.get("x-forwarded-host")) ??
+    nonEmpty(request.headers.get("host")) ??
+    url.host;
+  return WEB_SCHEMES.has(scheme) ? URL.parse(`${scheme}://${host}`)?.origin : undefined;
+};
 
 /**
  * Rejects browser requests issued by other sites, which would spend this deployment's model quota.
- * Browsers send Sec-Fetch-Site on every fetch; Origin covers older ones. Clients that send neither
- * are not browsers and are left to the rate limiter.
+ * Browsers send Sec-Fetch-Site on every fetch; for older ones the Origin's scheme, host and port
+ * must match the public origin of this request. Clients that send neither are not browsers and
+ * are left to the rate limiter.
  */
 export const isCrossSiteRequest = (request: Request): boolean => {
   const fetchSite = request.headers.get("sec-fetch-site");
@@ -147,6 +170,6 @@ export const isCrossSiteRequest = (request: Request): boolean => {
   if (origin === null) {
     return false;
   }
-  const host = request.headers.get("host") ?? new URL(request.url).host;
-  return URL.parse(origin)?.host !== host;
+  const expected = publicOrigin(request);
+  return expected === undefined || URL.parse(origin)?.origin !== expected;
 };

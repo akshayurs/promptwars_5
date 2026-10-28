@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createPlanRoute, type RouteDependencies } from "@/lib/api/planRoute";
+import { createConcurrencyLimiter, type ConcurrencyLimiter } from "@/lib/concurrencyLimit";
 import { API, LIMITS } from "@/lib/constants";
 import { PlanGenerationError, type PlanGenerator } from "@/lib/gemini";
 import { createLogger } from "@/lib/logger";
@@ -14,10 +15,15 @@ const generate = vi.fn<PlanGenerator["generate"]>();
 const refine = vi.fn<PlanGenerator["refine"]>();
 const lines: string[] = [];
 
-const build = (capacity = 100, timeoutMs?: number) => {
+const build = (
+  capacity = 100,
+  timeoutMs?: number,
+  inFlight: ConcurrencyLimiter = createConcurrencyLimiter(API.maxInFlightPerClient),
+) => {
   const deps: RouteDependencies = {
     generator: () => ({ generate, refine }),
     limiter: createRateLimiter({ capacity, refillPerSecond: 0.001, now: () => 0 }),
+    inFlight,
     logger: createLogger(
       (line) => lines.push(line),
       () => new Date(0),
@@ -146,6 +152,10 @@ describe("createPlanRoute", () => {
     ["Sec-Fetch-Site same-site", { "sec-fetch-site": "same-site" }],
     ["a foreign Origin", { origin: "https://attacker.example" }],
     ["a malformed Origin", { origin: "null" }],
+    [
+      "an http Origin for an https deployment",
+      { origin: "http://app.test", host: "app.test", "x-forwarded-proto": "https" },
+    ],
   ])("returns 403 without calling the model for %s", async (_label, headers) => {
     const res = await call(build(), valid(), headers);
     expect(res.status).toBe(403);
@@ -158,7 +168,10 @@ describe("createPlanRoute", () => {
   it.each([
     ["Sec-Fetch-Site same-origin", { "sec-fetch-site": "same-origin" }],
     ["a matching Origin", { origin: "http://localhost" }],
-    ["a matching Origin behind a Host header", { origin: "https://app.test", host: "app.test" }],
+    [
+      "a matching Origin behind a proxy",
+      { origin: "https://app.test", host: "app.test", "x-forwarded-proto": "https" },
+    ],
     ["no browser headers", {}],
   ])("accepts requests with %s", async (_label, headers) => {
     generate.mockResolvedValue(makeGeneratedPlan());
@@ -321,5 +334,98 @@ describe("createPlanRoute", () => {
   it("rejects plan-shaped bodies with unknown keys", async () => {
     const res = await call(build(), JSON.stringify({ ...makeIntake(), plan: makePlan() }));
     expect(res.status).toBe(400);
+  });
+});
+
+describe("createPlanRoute in-flight cap", () => {
+  const deferred = () => {
+    let resolve: (value: ReturnType<typeof makeGeneratedPlan>) => void = () => undefined;
+    const promise = new Promise<ReturnType<typeof makeGeneratedPlan>>((settle) => {
+      resolve = settle;
+    });
+    return { promise, resolve };
+  };
+
+  const client = (address: string) => ({ "x-forwarded-for": address });
+
+  it("answers 429 with Retry-After once a client has the maximum running", async () => {
+    const pending = deferred();
+    generate.mockReturnValue(pending.promise);
+    const inFlight = createConcurrencyLimiter(API.maxInFlightPerClient);
+    const route = build(100, undefined, inFlight);
+    const running = Array.from({ length: API.maxInFlightPerClient }, () =>
+      call(route, valid(), client("2001:db8:1:2::1")),
+    );
+    const extra = await call(route, valid(), client("2001:db8:1:2::99"));
+    expect(extra.status).toBe(429);
+    expect(extra.headers.get("Retry-After")).toBe(String(API.inFlightRetryAfterSeconds));
+    expect(extra.headers.get("RateLimit")).not.toBeNull();
+    expect(JSON.parse(lines.at(-1) ?? "{}")).toMatchObject({
+      level: "warn",
+      status: 429,
+      reason: "too_many_in_flight",
+    });
+    expect(generate).toHaveBeenCalledTimes(API.maxInFlightPerClient);
+    pending.resolve(makeGeneratedPlan());
+    expect((await Promise.all(running)).map((res) => res.status)).toEqual(running.map(() => 200));
+    expect(inFlight.size()).toBe(0);
+  });
+
+  it("does not hold other clients back", async () => {
+    const pending = deferred();
+    generate.mockReturnValueOnce(pending.promise).mockResolvedValue(makeGeneratedPlan());
+    const route = build(100, undefined, createConcurrencyLimiter(1));
+    const running = call(route, valid(), client("203.0.113.7"));
+    expect((await call(route, valid(), client("203.0.113.8"))).status).toBe(200);
+    expect((await call(route, valid(), client("203.0.113.7"))).status).toBe(429);
+    pending.resolve(makeGeneratedPlan());
+    expect((await running).status).toBe(200);
+  });
+
+  it("frees the slot after a successful generation", async () => {
+    generate.mockResolvedValue(makeGeneratedPlan());
+    const route = build(100, undefined, createConcurrencyLimiter(1));
+    expect((await call(route, valid())).status).toBe(200);
+    expect((await call(route, valid())).status).toBe(200);
+  });
+
+  it("frees the slot after a failed generation", async () => {
+    generate.mockRejectedValueOnce(new PlanGenerationError("upstream", "nope"));
+    generate.mockResolvedValue(makeGeneratedPlan());
+    const inFlight = createConcurrencyLimiter(1);
+    const route = build(100, undefined, inFlight);
+    expect((await call(route, valid())).status).toBe(502);
+    expect(inFlight.size()).toBe(0);
+    expect((await call(route, valid())).status).toBe(200);
+  });
+
+  it("frees the slot when the client disconnects", async () => {
+    const controller = new AbortController();
+    generate.mockImplementation(() => {
+      controller.abort();
+      return Promise.reject(new PlanGenerationError("timeout", "Plan generation timed out"));
+    });
+    const inFlight = createConcurrencyLimiter(1);
+    const res = await build(
+      100,
+      undefined,
+      inFlight,
+    )(
+      new Request("http://localhost/api/plan", {
+        method: "POST",
+        body: valid(),
+        headers: { "content-type": "application/json" },
+        signal: controller.signal,
+      }),
+    );
+    expect(res.status).toBe(499);
+    expect(inFlight.size()).toBe(0);
+  });
+
+  it("does not take a slot for a request that fails validation", async () => {
+    const inFlight = createConcurrencyLimiter(1);
+    const res = await call(build(100, undefined, inFlight), JSON.stringify({ nope: true }));
+    expect(res.status).toBe(400);
+    expect(inFlight.size()).toBe(0);
   });
 });

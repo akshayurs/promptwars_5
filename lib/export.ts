@@ -13,9 +13,11 @@ const PRODID = "-//EventCraft//Event plan//EN";
 const UTF8_BOM = "﻿";
 const FORMULA_START = /^[=+\-@\t\r]/;
 const NEEDS_QUOTES = /[",\r\n]/;
+// RFC 5545 TEXT allows HTAB but no other control character.
+const ICS_FORBIDDEN_CONTROL = /(?!\t)\p{Cc}/gu;
 
 /** Lower-case, hyphenated ASCII file name; names without letters or digits become "event". */
-export const exportFileName = (eventName: string, suffix: string): string => {
+const exportFileName = (eventName: string, suffix: string): string => {
   const slug = eventName
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
@@ -25,14 +27,17 @@ export const exportFileName = (eventName: string, suffix: string): string => {
   return `${slug || "event"}-${suffix}`;
 };
 
-/** Escapes an iCalendar TEXT value (RFC 5545 §3.3.11). */
-export const escapeIcsText = (value: string): string =>
-  value.replace(/[\\;,]/g, (char) => `\\${char}`).replace(/\r\n|\r|\n/g, "\\n");
+/** Escapes iCalendar TEXT and drops the control characters it forbids (RFC 5545 §3.3.11). */
+const escapeIcsText = (value: string): string =>
+  value
+    .replace(/[\\;,]/g, (char) => `\\${char}`)
+    .replace(/\r\n|\r|\n/g, "\\n")
+    .replace(ICS_FORBIDDEN_CONTROL, "");
 
 const encoder = new TextEncoder();
 
 /** Folds a content line at the octet limit without splitting a character (RFC 5545 §3.1). */
-export const foldIcsLine = (line: string): string => {
+const foldIcsLine = (line: string): string => {
   const parts: string[] = [];
   let part = "";
   let octets = 0;
@@ -98,7 +103,7 @@ const calendarEntries = ({ intake, plan }: StoredWorkspace): CalendarEntry[] => 
 ];
 
 /** iCalendar (RFC 5545) with an all-day event for the event day and for every milestone. */
-export const buildCalendar = (workspace: StoredWorkspace, now: Clock = systemClock): string => {
+const buildCalendar = (workspace: StoredWorkspace, now: Clock): string => {
   const stamp = icsTimestamp(now());
   const lines = [
     "BEGIN:VCALENDAR",
@@ -113,13 +118,13 @@ export const buildCalendar = (workspace: StoredWorkspace, now: Clock = systemClo
 };
 
 /** Quotes a CSV field (RFC 4180) and defuses text a spreadsheet would run as a formula. */
-export const csvField = (value: string): string => {
+const csvField = (value: string): string => {
   const safe = FORMULA_START.test(value) ? `'${value}` : value;
   return NEEDS_QUOTES.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 };
 
 /** Budget lines as CSV (RFC 4180) with a header row and a closing total row. */
-export const buildBudgetCsv = ({ intake, plan }: StoredWorkspace): string => {
+const buildBudgetCsv = ({ intake, plan }: StoredWorkspace): string => {
   const rows: Array<readonly string[]> = [
     ["Category", "Amount", "Currency", "Why it matters"],
     ...plan.budget.map((line) => [

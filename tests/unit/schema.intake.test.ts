@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { DAY_MS, DAYS_PER_YEAR, LIMITS } from "@/lib/constants";
 import { toIsoDay } from "@/lib/dates";
-import { createIntakeSchema, IntakeSchema } from "@/lib/schema";
+import { createIntakeSchema, IntakeSchema, RefineRequestSchema } from "@/lib/schema";
 
-import { makeIntake, makeIntakeFor } from "./fixtures";
+import { makeIntake, makeIntakeFor, makePlan } from "./fixtures";
 
 const NOW = Date.UTC(2026, 5, 15, 13, 30);
 const isoDay = (ms: number): string => toIsoDay(ms);
@@ -184,5 +184,50 @@ describe("createIntakeSchema date window", () => {
 
   it("still rejects unknown keys", () => {
     expect(schema.safeParse({ ...makeIntake({ eventDate: TODAY }), extra: 1 }).success).toBe(false);
+  });
+});
+
+describe("IntakeSchema text sanitisation", () => {
+  const parse = (overrides: Parameters<typeof makeIntake>[0]) =>
+    IntakeSchema.parse(makeIntake(overrides));
+
+  it("strips bidi overrides, isolates and zero-width characters from single-line text", () => {
+    const intake = parse({ eventName: "\u202EAsha\u200B and\u2066 Ravi\u2069\uFEFF" });
+    expect(intake.eventName).toBe("Asha and Ravi");
+  });
+
+  it("strips control characters and flattens line breaks in single-line text", () => {
+    expect(parse({ location: "Pune\r\nMaharashtra\u0000\u0085" }).location).toBe(
+      "Pune Maharashtra",
+    );
+  });
+
+  it("keeps tabs and newlines in the multi-line vibe and must-haves", () => {
+    const intake = parse({ vibe: "Warm\r\nfloral\u0007", mustHaves: "\u202ELive\tband\nDhol" });
+    expect(intake.vibe).toBe("Warm\nfloral");
+    expect(intake.mustHaves).toBe("Live\tband\nDhol");
+  });
+
+  it("sanitises event-type details", () => {
+    const intake = IntakeSchema.parse({
+      ...makeIntake(),
+      details: { coupleNames: "Asha\u200B & Ravi\u0000", ceremonyStyle: "Temple\u202D" },
+    });
+    expect(intake.details).toEqual({ coupleNames: "Asha & Ravi", ceremonyStyle: "Temple" });
+  });
+
+  it("measures length after removing invisible characters", () => {
+    const result = IntakeSchema.safeParse(makeIntake({ eventName: "A\u200B\u200B\u202E" }));
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(["eventName"]);
+  });
+
+  it("sanitises the refine instruction before checking its length", () => {
+    const request = { intake: makeIntake(), plan: makePlan() };
+    expect(
+      RefineRequestSchema.safeParse({ ...request, instruction: "ab\u200B\u0000" }).success,
+    ).toBe(false);
+    const parsed = RefineRequestSchema.parse({ ...request, instruction: "Add\u202E flowers" });
+    expect(parsed.instruction).toBe("Add flowers");
   });
 });

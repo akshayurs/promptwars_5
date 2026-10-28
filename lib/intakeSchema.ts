@@ -1,18 +1,21 @@
 import { z } from "zod";
 
-import { ADMISSION_TYPES, CURRENCIES, DAYS_PER_YEAR, LIMITS } from "@/lib/constants";
+import { ADMISSION_TYPES, CURRENCIES, LIMITS } from "@/lib/constants";
 import { daysUntil, systemClock, type Clock } from "@/lib/dates";
 import { formatCount } from "@/lib/format";
+import { sanitizeText } from "@/lib/sanitize";
 
 const ENTER_A_NUMBER = "Enter a number";
 const UNKNOWN_FIELDS = "Remove fields this form does not use";
 
 type Bounds = { subject: string; min: number; max: number };
+type TextBounds = Bounds & { multiline?: boolean };
 
-/** Trimmed text with plain-language length messages, e.g. "Enter a location of at least 2…". */
-export const boundedText = ({ subject, min, max }: Bounds): z.ZodString =>
+/** Sanitised, trimmed text with plain-language length messages, e.g. "Enter a location of…". */
+export const boundedText = ({ subject, min, max, multiline = false }: TextBounds): z.ZodString =>
   z
     .string({ error: `Enter ${subject}` })
+    .overwrite((value) => sanitizeText(value, { multiline }))
     .trim()
     .min(min, { error: `Enter ${subject} of at least ${formatCount(min)} characters` })
     .max(max, { error: `Enter ${subject} of at most ${formatCount(max)} characters` });
@@ -62,7 +65,7 @@ const DateSchema = z.iso.date({ error: "Enter a valid event date", abort: true }
 
 const isUpcomingDate = (isoDay: string, now: Clock): boolean => {
   const days = daysUntil(isoDay, now);
-  return days >= -LIMITS.pastDateGraceDays && days <= LIMITS.maxYearsAhead * DAYS_PER_YEAR;
+  return days >= -LIMITS.pastDateGraceDays && days <= LIMITS.maxDaysBeforeEvent;
 };
 
 const commonFields = (eventDate: z.ZodType<string>) => ({
@@ -85,9 +88,15 @@ const commonFields = (eventDate: z.ZodType<string>) => ({
     min: LIMITS.minTextChars,
     max: LIMITS.mediumText,
   }),
-  vibe: boundedText({ subject: "a vibe", min: LIMITS.minVibeChars, max: LIMITS.longText }),
+  vibe: boundedText({
+    subject: "a vibe",
+    min: LIMITS.minVibeChars,
+    max: LIMITS.longText,
+    multiline: true,
+  }),
   mustHaves: z
     .string({ error: "Enter your must-haves" })
+    .overwrite((value) => sanitizeText(value, { multiline: true }))
     .trim()
     .max(LIMITS.longText, {
       error: `Enter must-haves of at most ${formatCount(LIMITS.longText)} characters`,

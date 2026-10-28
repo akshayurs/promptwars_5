@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createConcurrencyLimiter } from "@/lib/concurrencyLimit";
 import type { PlanGenerator } from "@/lib/gemini";
 import { createLogger } from "@/lib/logger";
 import { createRateLimiter } from "@/lib/rateLimit";
@@ -15,6 +16,7 @@ vi.mock("@/lib/api/deps", () => ({
   routeDependencies: {
     generator: () => ({ generate, refine }),
     limiter: createRateLimiter({ capacity: 100, refillPerSecond: 1 }),
+    inFlight: createConcurrencyLimiter(2),
     logger: createLogger(() => undefined),
   },
   cspReportDependencies: {
@@ -119,12 +121,18 @@ describe.each([
   ["/api/refine", refineRoute],
   ["/api/csp-report", cspReportRoute],
 ])("%s other methods", (_path, route) => {
-  it.each(["GET", "PUT", "PATCH", "DELETE"] as const)(
-    "answers %s with 405 and Allow: POST",
+  it.each(["GET", "PUT", "PATCH", "DELETE", "OPTIONS"] as const)(
+    "answers %s with 405, Allow: POST and the API headers",
     (method) => {
       const res = route[method]();
       expect(res.status).toBe(405);
       expect(res.headers.get("Allow")).toBe("POST");
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(res.headers.get("Content-Security-Policy")).toBe(
+        "default-src 'none'; frame-ancestors 'none'",
+      );
+      expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(res.headers.get("X-Request-Id")).toMatch(/^[0-9a-f-]{36}$/);
     },
   );
 });

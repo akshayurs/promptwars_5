@@ -36,6 +36,16 @@ describe("routeDependencies", () => {
     expect(typeof routeDependencies.logger.info).toBe("function");
   });
 
+  it("caps running generations per client key", async () => {
+    const { API } = await import("@/lib/constants");
+    const { routeDependencies } = await import("@/lib/api/deps");
+    const slots = Array.from({ length: API.maxInFlightPerClient }, () =>
+      routeDependencies.inFlight.acquire("k"),
+    );
+    expect(slots.every((release) => release !== null)).toBe(true);
+    expect(routeDependencies.inFlight.acquire("k")).toBeNull();
+  });
+
   it("gives CSP reports their own limiter so they never spend plan quota", async () => {
     const { cspReportDependencies, routeDependencies } = await import("@/lib/api/deps");
     expect(cspReportDependencies.limiter).not.toBe(routeDependencies.limiter);

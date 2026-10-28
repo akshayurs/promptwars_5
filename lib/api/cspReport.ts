@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { countBy } from "@/lib/collections";
 import { LIMITS } from "@/lib/constants";
 import { clientKey, readJsonBody } from "@/lib/http";
 import type { Logger } from "@/lib/logger";
@@ -83,13 +84,8 @@ const toViolations = (value: unknown): Violation[] => {
   ];
 };
 
-const tally = (values: readonly string[]): string => {
-  const counts = new Map<string, number>();
-  for (const value of values) {
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
-  return [...counts].map(([value, count]) => `${value}=${String(count)}`).join(",");
-};
+const tally = (values: readonly string[]): string =>
+  [...countBy(values)].map(([value, count]) => `${value}=${String(count)}`).join(",");
 
 /** POST handler for browser CSP violation reports: rate limited, size capped, logs counts only. */
 export const createCspReportRoute =

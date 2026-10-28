@@ -176,6 +176,27 @@ describe("clientKey", () => {
   it("falls back to anonymous", () => {
     expect(clientKey(withHeaders({}))).toBe("anonymous");
   });
+
+  it("gives every IPv6 address in one /64 the same key", () => {
+    const first = clientKey(withHeaders({ "x-forwarded-for": "2001:db8:1:2::1" }));
+    const rotated = clientKey(
+      withHeaders({ "x-forwarded-for": "2001:db8:1:2:abcd:ef01:2345:6789" }),
+    );
+    expect(first).toBe("2001:db8:1:2:0:0:0:0/64");
+    expect(rotated).toBe(first);
+  });
+
+  it("normalises the IPv6 prefix from x-real-ip too", () => {
+    expect(clientKey(withHeaders({ "x-real-ip": "2001:db8:1:2:0:0:0:7".toUpperCase() }))).toBe(
+      "2001:db8:1:2:0:0:0:0/64",
+    );
+  });
+
+  it("keeps IPv4 and IPv4-mapped IPv6 clients per address", () => {
+    const ipv4 = "203.0.113.7";
+    expect(clientKey(withHeaders({ "x-forwarded-for": "203.0.113.7" }))).toBe("203.0.113.7");
+    expect(clientKey(withHeaders({ "x-forwarded-for": `::ffff:${ipv4}` }))).toBe("203.0.113.7");
+  });
 });
 
 describe("isCrossSiteRequest", () => {
@@ -188,5 +209,55 @@ describe("isCrossSiteRequest", () => {
 
   it.each(["same-site", "cross-site"])("rejects Sec-Fetch-Site %s", (site) => {
     expect(isCrossSiteRequest(withHeaders({ "sec-fetch-site": site }))).toBe(true);
+  });
+
+  it("leaves requests with neither Sec-Fetch-Site nor Origin to the rate limiter", () => {
+    expect(isCrossSiteRequest(withHeaders({}))).toBe(false);
+  });
+
+  it.each([
+    ["the request URL's origin", { origin: "http://localhost" }],
+    ["the Host header", { origin: "http://app.test", host: "app.test" }],
+    [
+      "the forwarded scheme and host",
+      { origin: "https://app.test", "x-forwarded-proto": "https", "x-forwarded-host": "app.test" },
+    ],
+    [
+      "the right-most forwarded values",
+      {
+        origin: "https://app.test",
+        "x-forwarded-proto": "http, HTTPS",
+        "x-forwarded-host": "evil.test, app.test",
+      },
+    ],
+    [
+      "a default port",
+      { origin: "https://app.test", "x-forwarded-proto": "https", host: "app.test:443" },
+    ],
+    ["an explicit matching port", { origin: "http://localhost:3000", host: "localhost:3000" }],
+  ])("accepts an Origin matching %s", (_label, headers) => {
+    expect(isCrossSiteRequest(withHeaders(headers))).toBe(false);
+  });
+
+  it.each([
+    ["another host", { origin: "https://attacker.example" }],
+    ["an https Origin for an http request", { origin: "https://localhost" }],
+    [
+      "an http Origin for an https deployment",
+      { origin: "http://app.test", "x-forwarded-proto": "https", "x-forwarded-host": "app.test" },
+    ],
+    ["another port", { origin: "http://localhost:8080" }],
+    ["an opaque Origin", { origin: "null" }],
+    ["an Origin that is not a URL", { origin: "app.test" }],
+    [
+      "a forwarded scheme that is not http or https",
+      { origin: "ftp://app.test", "x-forwarded-proto": "ftp", host: "app.test" },
+    ],
+    [
+      "a forwarded host that is not a host",
+      { origin: "http://app.test", "x-forwarded-host": "app test" },
+    ],
+  ])("rejects %s", (_label, headers) => {
+    expect(isCrossSiteRequest(withHeaders(headers))).toBe(true);
   });
 });
