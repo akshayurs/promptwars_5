@@ -196,8 +196,12 @@ test.describe("summary", () => {
     const details = page.locator("details");
     await expect(details).not.toHaveCount(0);
     await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
-    for (const item of await details.all()) await expect(item).toHaveAttribute("open", "");
+    for (const item of await details.all()) {
+      await expect(item).toHaveAttribute("open", "");
+    }
     await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
-    for (const item of await details.all()) await expect(item).not.toHaveAttribute("open");
+    for (const item of await details.all()) {
+      await expect(item).not.toHaveAttribute("open");
+    }
   });
 });

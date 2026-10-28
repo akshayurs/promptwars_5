@@ -7,7 +7,7 @@ import { LIMITS } from "../../lib/constants";
 import {
   expect,
   fillIntake,
-  fulfilJson,
+  holdApi,
   makeIntake,
   makePlan,
   makeWorkspace,
@@ -15,15 +15,6 @@ import {
   seedWorkspace,
   test,
 } from "./fixtures";
-
-const SLOW_MS = 2_500;
-
-const delayApi = async (page: Page, path: "plan" | "refine"): Promise<void> => {
-  await page.route(`**/api/${path}`, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, SLOW_MS));
-    await fulfilJson(route, makePlan()).catch(() => undefined);
-  });
-};
 
 const readDownload = async (page: Page, button: string): Promise<string> => {
   const downloadPromise = page.waitForEvent("download");
@@ -35,7 +26,7 @@ const readDownload = async (page: Page, button: string): Promise<string> => {
 test.describe("cancelling a request", () => {
   test("intake Cancel stops generation and keeps the answers", async ({ page }) => {
     const intake = makeIntake();
-    await delayApi(page, "plan");
+    const release = await holdApi(page, "plan");
     await page.goto("/");
     await fillIntake(page, intake);
     await page.getByRole("button", { name: "Generate plan" }).click();
@@ -45,11 +36,12 @@ test.describe("cancelling a request", () => {
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByLabel("Event name")).toHaveValue(intake.eventName);
     await expect(page.getByLabel("Guest count")).toHaveValue(String(intake.guestCount));
+    release();
   });
 
   test("refine Cancel stops the refinement", async ({ page }) => {
     await seedWorkspace(page, makeWorkspace({ plan: makePlan("Original summary text.") }));
-    await delayApi(page, "refine");
+    const release = await holdApi(page, "refine");
     await page.goto("/plan");
     await page.getByLabel("What should change?").fill("Make it eco-friendly");
     await page.getByRole("button", { name: "Apply refinement" }).click();
@@ -57,6 +49,7 @@ test.describe("cancelling a request", () => {
 
     await expect(page.getByText("Refinement cancelled.")).toBeVisible();
     await expect(page.getByText("Original summary text.")).toBeVisible();
+    release();
   });
 });
 
@@ -106,6 +99,7 @@ test.describe("importing a plan", () => {
       mimeType: "application/json",
       buffer: Buffer.from(JSON.stringify(workspace)),
     });
+    await page.getByRole("button", { name: "Import plan" }).click();
     await expect(page).toHaveURL(/\/plan$/);
     await expect(
       page.getByRole("heading", { level: 1, name: workspace.intake.eventName }),
@@ -120,6 +114,7 @@ test.describe("importing a plan", () => {
       mimeType: "application/json",
       buffer: Buffer.from("this is not json"),
     });
+    await page.getByRole("button", { name: "Import plan" }).click();
     await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
     await expect(input).toHaveAttribute("aria-invalid", "true");
     await expect(page).toHaveURL(/\/$/);

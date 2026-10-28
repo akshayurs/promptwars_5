@@ -160,7 +160,9 @@ export const seedWorkspace = async (page: Page, workspace: StoredWorkspace): Pro
   await page.addInitScript(
     ([key, value]) => {
       const marker = `${key}.seeded`;
-      if (window.sessionStorage.getItem(marker) !== null) return;
+      if (window.sessionStorage.getItem(marker) !== null) {
+        return;
+      }
       window.sessionStorage.setItem(marker, "1");
       window.localStorage.setItem(key, value);
     },
@@ -184,12 +186,16 @@ const payloadProblems = (
 ) => {
   const request = route.request();
   const problems: string[] = [];
-  if (request.method() !== "POST") problems.push(`${request.url()} used ${request.method()}`);
+  if (request.method() !== "POST") {
+    problems.push(`${request.url()} used ${request.method()}`);
+  }
   if (!(request.headers()["content-type"] ?? "").startsWith("application/json")) {
     problems.push(`${request.url()} sent a non-JSON content type`);
   }
   const body: unknown = request.postDataJSON();
-  if (!schema.safeParse(body).success) problems.push(`${request.url()} sent an invalid body`);
+  if (!schema.safeParse(body).success) {
+    problems.push(`${request.url()} sent an invalid body`);
+  }
   return { problems, body };
 };
 
@@ -221,6 +227,22 @@ export const mockApi = async (
     await fulfilJson(route, responses.refine ?? makePlan("Refined plan summary."));
   });
   return calls;
+};
+
+/**
+ * Holds an API route open until the returned release function is called, so cancellation tests
+ * never race a timer.
+ */
+export const holdApi = async (page: Page, path: "plan" | "refine"): Promise<() => void> => {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/${path}`, async (route) => {
+    await gate;
+    await fulfilJson(route, makePlan()).catch(() => undefined);
+  });
+  return release;
 };
 
 const EVENT_TYPE_NAMES: Record<EventType, string> = {
@@ -273,7 +295,9 @@ const installGuard = async (page: Page): Promise<PageGuard> => {
     });
   });
   page.on("console", (message) => {
-    if (/Content Security Policy/i.test(message.text())) guard.problems.push(message.text());
+    if (/Content Security Policy/i.test(message.text())) {
+      guard.problems.push(message.text());
+    }
   });
   page.on("pageerror", (error) => {
     guard.problems.push(`Uncaught page error: ${error.message}`);

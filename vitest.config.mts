@@ -2,6 +2,8 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
+process.env.TZ = "UTC";
+
 const DOM_TESTS = [
   "tests/components/**/*.test.tsx",
   "tests/unit/storage.test.ts",
@@ -19,7 +21,9 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    setupFiles: ["./tests/setup.ts"],
+    setupFiles: ["./tests/setup.ts", "./tests/setup.clock.ts"],
+    testTimeout: 15_000,
+    env: { TZ: "UTC" },
     restoreMocks: true,
     unstubGlobals: true,
     unstubEnvs: true,
@@ -29,7 +33,6 @@ export default defineConfig({
         extends: true,
         test: {
           name: "node",
-          setupFiles: ["./tests/setup.ts", "./tests/setup.clock.ts"],
           environment: "node",
           include: ["tests/unit/**/*.test.ts", "tests/api/**/*.test.ts"],
           exclude: DOM_TESTS,
@@ -42,7 +45,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: "v8",
-      include: ["lib/**", "components/**", "app/api/**", "proxy.ts"],
+      include: ["lib/**", "components/**", "app/**", "proxy.ts", "instrumentation.ts"],
       thresholds: {
         lines: 100,
         branches: 100,

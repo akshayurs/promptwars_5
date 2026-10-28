@@ -3,7 +3,10 @@ import type { Page } from "@playwright/test";
 
 import {
   expect,
+  fillIntake,
   fulfilJson,
+  holdApi,
+  makeIntake,
   makePlan,
   makeWorkspace,
   mockApi,
@@ -67,6 +70,56 @@ test.describe("accessibility", () => {
     await seedWorkspace(page, makeWorkspace());
     await page.goto("/plan/summary");
     await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
+    await expectNoViolations(page);
+  });
+
+  test("edit details page has no axe violations", async ({ page }) => {
+    await seedWorkspace(page, makeWorkspace());
+    await page.goto("/plan/edit");
+    await expect(page.getByRole("button", { name: "Update plan" })).toBeVisible();
+    await expectNoViolations(page);
+  });
+
+  test("replace-plan confirmation has no axe violations", async ({ page }) => {
+    await seedWorkspace(page, makeWorkspace());
+    await mockApi(page);
+    await page.goto("/");
+    await fillIntake(page, makeIntake({ eventName: "A brand new event" }));
+    await page.getByRole("button", { name: "Generate plan" }).click();
+    await expect(page.getByText("Replace your current plan?")).toBeVisible();
+    await expectNoViolations(page);
+  });
+
+  test("invalid import error has no axe violations", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel("Import a saved plan (JSON)").setInputFiles({
+      name: "plan.json",
+      mimeType: "application/json",
+      buffer: Buffer.from("this is not json"),
+    });
+    await page.getByRole("button", { name: "Import plan" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
+    await expectNoViolations(page);
+  });
+
+  test("cancelled notice has no axe violations", async ({ page }) => {
+    const release = await holdApi(page, "plan");
+    await page.goto("/");
+    await fillIntake(page);
+    await page.getByRole("button", { name: "Generate plan" }).click();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("Plan generation cancelled.")).toBeVisible();
+    await expectNoViolations(page);
+    release();
+  });
+
+  test("summary delete confirmation has no axe violations", async ({ page }) => {
+    await seedWorkspace(page, makeWorkspace());
+    await page.goto("/plan/summary");
+    await page.getByRole("button", { name: "Start over" }).click();
+    await expect(
+      page.getByRole("group", { name: "Delete this plan from the browser?" }),
+    ).toBeVisible();
     await expectNoViolations(page);
   });
 
@@ -141,7 +194,7 @@ test.describe("accessibility", () => {
     });
   });
 
-  for (const path of ["/", "/plan", "/plan/summary"]) {
+  for (const path of ["/", "/plan", "/plan/edit", "/plan/summary", "/no-such-page"]) {
     test(`${path} has exactly one h1`, async ({ page }) => {
       await seedWorkspace(page, makeWorkspace());
       await page.goto(path);

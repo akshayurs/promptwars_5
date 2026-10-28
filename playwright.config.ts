@@ -9,7 +9,7 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   reporter: [["list"], ["html", { open: "never" }]],
-  use: { baseURL: BASE_URL, trace: "retain-on-failure" },
+  use: { baseURL: BASE_URL, timezoneId: "UTC", trace: "retain-on-failure" },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile", use: { ...devices["Pixel 7"] } },
