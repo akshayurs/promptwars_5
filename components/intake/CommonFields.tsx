@@ -4,6 +4,7 @@ import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { CURRENCIES, LIMITS } from "@/lib/constants";
 import { todayIso } from "@/lib/format";
 
+import { FIELD_LABELS } from "./fieldLabels";
 import { errorFor, type FieldsProps } from "./formState";
 
 const noSubscription = (): (() => void) => () => undefined;
@@ -22,7 +23,7 @@ const DateField = ({
   return (
     <TextField
       id="eventDate"
-      label="Event date"
+      label={FIELD_LABELS.eventDate}
       type="date"
       {...(today ? { min: today } : {})}
       value={value}
@@ -38,7 +39,7 @@ export const LogisticsFields = ({ values, issues, onChange }: FieldsProps): Reac
     <DateField value={values.eventDate} issues={issues} onChange={onChange} />
     <TextField
       id="guestCount"
-      label="Guest count"
+      label={FIELD_LABELS.guestCount}
       type="number"
       inputMode="numeric"
       min={LIMITS.minGuests}
@@ -50,7 +51,7 @@ export const LogisticsFields = ({ values, issues, onChange }: FieldsProps): Reac
     />
     <TextField
       id="totalBudget"
-      label="Total budget"
+      label={FIELD_LABELS.totalBudget}
       type="number"
       inputMode="decimal"
       min={1}
@@ -62,7 +63,7 @@ export const LogisticsFields = ({ values, issues, onChange }: FieldsProps): Reac
     />
     <SelectField
       id="currency"
-      label="Currency"
+      label={FIELD_LABELS.currency}
       value={values.currency}
       onChange={onChange("currency")}
       options={CURRENCIES.map((code) => ({ value: code, label: code }))}
@@ -74,7 +75,7 @@ export const StoryFields = ({ values, issues, onChange }: FieldsProps): ReactEle
   <>
     <TextField
       id="location"
-      label="City or venue area"
+      label={FIELD_LABELS.location}
       autoComplete="address-level2"
       value={values.location}
       onChange={onChange("location")}
@@ -84,7 +85,7 @@ export const StoryFields = ({ values, issues, onChange }: FieldsProps): ReactEle
     />
     <TextAreaField
       id="vibe"
-      label="Vibe and preferences"
+      label={FIELD_LABELS.vibe}
       hint="Theme, mood, cultural touches, dietary needs, anything that makes it yours."
       value={values.vibe}
       onChange={onChange("vibe")}
@@ -94,7 +95,7 @@ export const StoryFields = ({ values, issues, onChange }: FieldsProps): ReactEle
     />
     <TextAreaField
       id="mustHaves"
-      label="Must-haves (optional)"
+      label={FIELD_LABELS.mustHaves}
       value={values.mustHaves}
       onChange={onChange("mustHaves")}
       maxLength={LIMITS.longText}

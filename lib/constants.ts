@@ -35,3 +35,5 @@ export const API = {
 export const STORAGE_KEY = "eventcraft.plan.v2";
 export const DAY_MS = 86_400_000;
 export const DUE_SOON_DAYS = 7;
+/** Delay before a pending generation or refinement announces that it is still running. */
+export const LONG_WAIT_NOTICE_MS = 10_000;

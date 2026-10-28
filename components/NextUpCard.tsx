@@ -34,7 +34,7 @@ const NextMilestone = ({
         {relativeLabel(milestone.daysBeforeEvent)}
       </p>
       {overdue ? (
-        <p className="w-fit rounded-lg bg-danger-soft px-2 py-1 text-sm font-semibold text-danger">
+        <p className="w-fit rounded-lg bg-danger-soft forced-colors:border px-2 py-1 text-sm font-semibold text-danger">
           Overdue: this was due {formatDate(date)}.
         </p>
       ) : null}

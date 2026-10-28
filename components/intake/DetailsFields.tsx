@@ -5,6 +5,7 @@ import type { FieldIssues } from "@/lib/client";
 import { ADMISSION_TYPES, LIMITS } from "@/lib/constants";
 import type { EventType } from "@/lib/schema";
 
+import { FIELD_LABELS } from "./fieldLabels";
 import { errorFor, toAdmission, type Admission, type DetailsValues } from "./formState";
 
 const ADMISSION_LABELS: Record<Admission, string> = { free: "Free", ticketed: "Ticketed" };
@@ -36,7 +37,7 @@ export const WeddingFields = ({
   <DetailsFieldset legend="Wedding details">
     <TextField
       id="coupleNames"
-      label="Couple's names"
+      label={FIELD_LABELS["details.coupleNames"]}
       value={values.coupleNames}
       onChange={(event) => {
         onChange({ coupleNames: event.target.value });
@@ -47,7 +48,7 @@ export const WeddingFields = ({
     />
     <TextField
       id="ceremonyStyle"
-      label="Ceremony style"
+      label={FIELD_LABELS["details.ceremonyStyle"]}
       hint="For example traditional Hindu, church, civil or a blend of cultures."
       value={values.ceremonyStyle}
       onChange={(event) => {
@@ -68,7 +69,7 @@ export const BirthdayFields = ({
   <DetailsFieldset legend="Birthday details">
     <TextField
       id="honoreeName"
-      label="Guest of honour's name"
+      label={FIELD_LABELS["details.honoreeName"]}
       value={values.honoreeName}
       onChange={(event) => {
         onChange({ honoreeName: event.target.value });
@@ -79,7 +80,7 @@ export const BirthdayFields = ({
     />
     <TextField
       id="honoreeAge"
-      label="Age they are turning"
+      label={FIELD_LABELS["details.honoreeAge"]}
       type="number"
       inputMode="numeric"
       min={LIMITS.minAge}
@@ -102,7 +103,7 @@ export const CommunityFields = ({
   <DetailsFieldset legend="Community event details">
     <SelectField
       id="admission"
-      label="Admission"
+      label={FIELD_LABELS["details.admission"]}
       value={values.admission}
       onChange={(event) => {
         onChange({ admission: toAdmission(event.target.value) });
@@ -114,7 +115,7 @@ export const CommunityFields = ({
       <input
         id="needsPermit"
         type="checkbox"
-        className="size-5 shrink-0 cursor-pointer rounded accent-brand"
+        className="size-6 shrink-0 cursor-pointer rounded accent-brand"
         checked={values.needsPermit}
         onChange={(event) => {
           onChange({ needsPermit: event.target.checked });

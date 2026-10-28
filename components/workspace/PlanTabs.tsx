@@ -52,7 +52,7 @@ export const PlanTabs = ({
   const { intake, plan } = workspace;
   return (
     <Tabs.Root defaultValue="budget" className="flex flex-col gap-5">
-      <Tabs.List aria-label="Plan sections" className="flex border-b border-line">
+      <Tabs.List aria-label="Plan sections" className="flex flex-wrap border-b border-line">
         {TABS.map(({ value, label, Icon }) => (
           <Tabs.Trigger key={value} value={value} className={TRIGGER}>
             <Icon className="hidden size-4 min-[400px]:block" />

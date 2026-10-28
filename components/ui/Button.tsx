@@ -9,7 +9,7 @@ export type ButtonProps = ComponentPropsWithRef<"button"> & {
 };
 
 const BASE =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-[color,background-color,border-color,box-shadow,transform] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-55 disabled:active:translate-y-0 aria-disabled:cursor-not-allowed aria-disabled:opacity-55 aria-disabled:active:translate-y-0";
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-[color,background-color,border-color,box-shadow,transform] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-55 disabled:active:translate-y-0 aria-disabled:cursor-not-allowed aria-disabled:opacity-55 aria-disabled:active:translate-y-0 forced-colors:border";
 
 const VARIANTS: Record<Variant, string> = {
   primary:
@@ -23,7 +23,7 @@ const VARIANTS: Record<Variant, string> = {
 const Spinner = (): ReactElement => (
   <span
     aria-hidden="true"
-    className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent"
+    className="size-4 animate-spin rounded-full motion-reduce:animate-none border-2 border-current border-r-transparent"
   />
 );
 

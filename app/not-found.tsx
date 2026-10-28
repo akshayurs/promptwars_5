@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactElement } from "react";
 
 import { ArrowRightIcon } from "@/components/ui/Icons";
 import { CARD_PADDED, PAGE_TITLE, TEXT_LINK } from "@/components/ui/styles";
+
+export const metadata: Metadata = { title: "Page not found" };
 
 export default function NotFound(): ReactElement {
   return (

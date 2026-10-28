@@ -37,7 +37,14 @@ const detailsSummary = (intake: Intake): string => {
 const FactList = ({ intake }: { intake: Intake }): ReactElement => {
   const countdown = countdownLabel(daysUntil(intake.eventDate));
   const facts = [
-    ["Date", formatDate(intake.eventDate) + countdown, CalendarIcon],
+    [
+      "Date",
+      <>
+        <time dateTime={intake.eventDate}>{formatDate(intake.eventDate)}</time>
+        {countdown}
+      </>,
+      CalendarIcon,
+    ],
     ["Guests", String(intake.guestCount), UsersIcon],
     ["Budget", formatMoney(intake.totalBudget, intake.currency), WalletIcon],
     ["Location", intake.location, MapPinIcon],

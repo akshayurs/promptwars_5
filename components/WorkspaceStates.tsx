@@ -38,7 +38,10 @@ export const LoadingNotice = ({ title = "Workspace" }: { title?: string }): Reac
     </p>
     <div aria-hidden="true" className="flex flex-col gap-4">
       {SKELETON_BLOCKS.map((height) => (
-        <div key={height} className={`${height} animate-pulse rounded-2xl bg-surface-muted`} />
+        <div
+          key={height}
+          className={`${height} animate-pulse rounded-2xl motion-reduce:animate-none bg-surface-muted`}
+        />
       ))}
     </div>
   </div>

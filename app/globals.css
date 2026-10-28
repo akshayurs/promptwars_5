@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* The header only sticks where the viewport has room for it (not on phones or short, zoomed windows). */
+@custom-variant sticky-header (@media (min-width: 40rem) and (min-height: 32rem));
+
 /* Every text/background pair below meets WCAG AA 4.5:1; --control and --brand meet 3:1 as UI boundaries. */
 :root {
   --surface: #f7f8fa;
@@ -47,6 +50,23 @@
   }
 }
 
+/* Stronger borders and secondary text when the OS asks for more contrast. */
+@media (prefers-contrast: more) {
+  :root {
+    --ink-muted: #2b3445;
+    --line: #7a8397;
+    --control: #4a5468;
+  }
+}
+
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root {
+    --ink-muted: #d3d8e1;
+    --line: #69728a;
+    --control: #9ba3b4;
+  }
+}
+
 @theme inline {
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
@@ -73,10 +93,10 @@ html {
   color-scheme: light dark;
 }
 
-/* Keeps focused elements clear of the sticky header. */
-@media (min-width: 40rem) {
+/* Keeps focused and scrolled-to elements clear of the sticky header (about 4.5rem tall). */
+@media (min-width: 40rem) and (min-height: 32rem) {
   html {
-    scroll-padding-top: 5rem;
+    scroll-padding-top: 6rem;
   }
 }
 
@@ -138,7 +158,69 @@ details > summary::-webkit-details-marker {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  progress::-webkit-progress-value {
+    transition: none;
+  }
+}
+
+/* Windows High Contrast and other forced-colour modes drop backgrounds and shadows, so every
+   state that relied on them gets a system-colour border, outline or underline instead. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+  [aria-current="page"] {
+    text-decoration: underline 2px;
+    text-underline-offset: 0.3em;
+  }
+  [role="tab"] {
+    border-bottom-color: Canvas;
+  }
+  [role="tab"][data-state="active"] {
+    border-bottom-color: Highlight;
+    color: Highlight;
+  }
+  [role="checkbox"][data-state="checked"] {
+    forced-color-adjust: none;
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+  label:has(> input[type="radio"]) {
+    border-color: Canvas;
+  }
+  label:has(> input[type="radio"]:checked) {
+    border-color: Highlight;
+  }
+  [aria-invalid="true"] {
+    border-style: double;
+    border-width: 3px;
+  }
+  :disabled,
+  [aria-disabled="true"] {
+    border-color: GrayText;
+    color: GrayText;
+  }
+  progress {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+  progress::-webkit-progress-bar {
+    background: Canvas;
+  }
+  progress::-webkit-progress-value {
+    background: Highlight;
+  }
+  progress::-moz-progress-bar {
+    background: Highlight;
+  }
+  .animate-spin {
+    border-right-color: Canvas;
   }
 }
 

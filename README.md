@@ -123,6 +123,7 @@ Open http://localhost:3000. The server refuses to start without `GEMINI_API_KEY`
 - **Env validation at startup**: [instrumentation.ts](instrumentation.ts) calls `readEnv()` when the Node.js runtime registers, so a missing key fails fast.
 - **Strict Zod at every boundary**: request bodies (`IntakeSchema`, `RefineRequestSchema`), model output (`GeneratedPlanSchema`), the API response as read by the browser (`PlanSchema`) and the stored workspace (`StoredWorkspaceSchema`). Object schemas are `.strict()` and text fields have length limits ([lib/constants.ts](lib/constants.ts) `LIMITS`).
 - **Body size limit**: 32,768 bytes, checked against `Content-Length` and again on the actual text ([lib/http.ts](lib/http.ts)); non-JSON content types get 415.
+- **Cross-site protection**: the API route handlers answer 403 to browser requests sent from other sites (`Sec-Fetch-Site` other than `same-origin`, or a mismatched `Origin`), so third-party pages cannot spend the model quota through a visitor's browser ([lib/http.ts](lib/http.ts)).
 - **Rate limiting**: token bucket per client key (capacity 10, refill 0.2 per second) in [lib/rateLimit.ts](lib/rateLimit.ts); 429 with `Retry-After`. The key is the right-most `x-forwarded-for` hop (appended by the platform proxy), falling back to `x-real-ip` ([lib/http.ts](lib/http.ts)); the bucket map is capped at 10,000 keys with least-recently-used eviction.
 - **CSP with a per-request nonce**: [proxy.ts](proxy.ts) builds `default-src 'self'`, a nonce plus `'strict-dynamic'` script policy, a nonce-based `style-src`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'` and `connect-src 'self'` (`'unsafe-eval'` only in development).
 - **Security headers**: [next.config.ts](next.config.ts) sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (two years, `includeSubDomains`), `Cross-Origin-Opener-Policy`, and disables `X-Powered-By`.
@@ -133,16 +134,24 @@ Open http://localhost:3000. The server refuses to start without `GEMINI_API_KEY`
 
 ## Accessibility notes
 
-Target: WCAG 2.2 AA.
+Target: WCAG 2.2 AA, plus AAA where it is cheap (enhanced contrast preference, reduced motion).
 
-- Landmarks: skip link, `header`, `nav` ("Primary"), `main#main`, `footer` in [app/layout.tsx](app/layout.tsx); `lang="en"` on the document.
-- Skip link is the first focusable element and moves focus to the focusable `main` element; each page has exactly one `h1`, which receives focus when the workspace or summary mounts.
-- Every control is labelled; form errors use `aria-invalid` and `aria-describedby` ([components/ui/Field.tsx](components/ui/Field.tsx)); after a failed submit focus moves to the error summary container at the top of the form.
-- Status messages use `role="status"` and `aria-live="polite"` (vendor progress, budget status, refine result, loading).
+- Landmarks: skip link, `header`, `nav` ("Primary"), `main#main`, `footer` in [app/layout.tsx](app/layout.tsx); `lang="en"` on the document. Nav links set `aria-current="page"`.
+- Every route has its own document title (`Plan a new event`, `Workspace`, `Summary`, `Page not found`; the root error boundary sets `Something went wrong`), exactly one `h1`, and headings that do not skip levels. The workspace and summary move focus to their `h1` on mount.
+- Every control is labelled; hints and errors are wired with `aria-describedby` and `aria-invalid` ([components/ui/Field.tsx](components/ui/Field.tsx)). The intake form states that all fields are required unless marked optional. After a failed submit, focus moves to an error summary at the top of the form that links to each invalid field in form order; following a link focuses the field ([components/intake/ErrorSummary.tsx](components/intake/ErrorSummary.tsx)).
+- Long requests (plan generation and refinement, typically 20 to 40 s): the form carries `aria-busy` while pending, the busy button stays focusable with `aria-disabled`, and a polite status region outside the busy form announces progress. If the request is still running after `LONG_WAIT_NOTICE_MS` ([lib/constants.ts](lib/constants.ts)), the status adds a reassurance that generation usually takes about half a minute ([components/useLongWait.ts](components/useLongWait.ts)); the timer is cleared on completion and unmount.
+- Disabled controls always come with a text reason: the minimum and maximum budget lines, and "Nothing to undo yet." next to the disabled undo button (linked with `aria-describedby`).
+- Status messages use `role="status"` (vendor and milestone progress, budget status, refine result, loading); dates are marked up with `<time dateTime>`.
 - Tabs and checkboxes use Radix primitives, which provide arrow-key navigation and correct ARIA roles; tables have captions and header scopes.
-- Touch targets are at least 44 px tall (`min-h-11`) on buttons and tabs; state is never conveyed by colour alone (icons and text accompany alert tones).
-- `prefers-reduced-motion` is honoured in [app/globals.css](app/globals.css); a dark colour scheme is provided.
-- axe-core runs in the e2e suite (see Testing strategy).
+- Target size (2.5.8): buttons, tabs, nav links and form controls are at least 44 px tall (`min-h-11`), checkboxes are 24 px, error summary links are at least 24 px tall, and the native radios sit inside full-row labels at least 44 px tall.
+- Focus not obscured (2.4.11): the header is sticky only on viewports at least 40rem wide and 32rem tall (a Tailwind `sticky-header` variant), and the same media query sets `scroll-padding-top: 6rem`, more than the header height, so focused elements scroll clear of it. On phones and short or zoomed windows the header scrolls away.
+- Reflow and text spacing (1.4.10, 1.4.12): layouts are single-column at 320 px, the tab list wraps instead of overflowing, the budget table hides its rationale column into the category cell on phones, and text containers use minimum heights rather than fixed heights.
+- Contrast: every text pair meets 4.5:1 and control borders, focus rings and progress fills meet 3:1 in light and dark schemes. `prefers-contrast: more` darkens secondary text and strengthens borders.
+- Forced colours (Windows High Contrast): [app/globals.css](app/globals.css) maps focus rings to `Highlight`, keeps the selected tab underline, checked checkboxes, the selected event type, progress bars and the current nav link visible with system colours, gives background-only buttons and badges a border, and shows disabled controls in `GrayText`.
+- Reduced motion: `prefers-reduced-motion` stops transitions, animations (including the spinner and loading skeleton, which also use `motion-reduce:animate-none`) and smooth scrolling.
+- Redundant entry (3.3.7): a failed generation keeps everything typed, switching event type keeps the details already entered for each type, and the workspace pre-fills the total budget from the intake.
+- State is never conveyed by colour alone (icons and text accompany alert tones and badges). A dark colour scheme is provided.
+- axe-core runs in the e2e suite (see Testing strategy); [tests/components/accessibility.test.tsx](tests/components/accessibility.test.tsx) covers the busy states, reassurance timing, error summary links and undo reason.
 
 Keyboard-only walkthrough (production build, Chrome, 2026-10-28):
 

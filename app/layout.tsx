@@ -48,7 +48,7 @@ export default async function RootLayout({
         >
           Skip to main content
         </a>
-        <header className="print-hidden z-40 border-b border-line bg-surface-raised/85 backdrop-blur-md sm:sticky sm:top-0">
+        <header className="print-hidden z-40 border-b border-line bg-surface-raised/85 backdrop-blur-md sticky-header:sticky sticky-header:top-0">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
             <Link
               href="/"
