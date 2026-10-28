@@ -3,6 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "description": "GenAI-powered planning assistant for weddings, birthdays and community events.",
+  "license": "MIT",
+  "author": "akshayurs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akshayurs/promptwars_5.git"
+  },
+  "bugs": {
+    "url": "https://github.com/akshayurs/promptwars_5/issues"
+  },
+  "homepage": "https://eventcraft-lac.vercel.app",
   "engines": {
     "node": ">=22.12.0"
   },

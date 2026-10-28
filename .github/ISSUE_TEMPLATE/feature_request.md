@@ -17,7 +17,7 @@ labels: enhancement
 
 - [ ] Changes the generated plan schema (`lib/schema.ts`)
 - [ ] Changes API behaviour or limits (`lib/constants.ts`, `app/api/**`)
-- [ ] Changes stored data (`eventcraft.plan.v1` in `localStorage`)
+- [ ] Changes stored data (`eventcraft.plan.v2` in `localStorage`)
 - [ ] Affects accessibility or keyboard flows
 
 ## Additional context

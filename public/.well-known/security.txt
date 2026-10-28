@@ -1,0 +1,5 @@
+Contact: https://github.com/akshayurs/promptwars_5/security/advisories/new
+Expires: 2027-10-28T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://eventcraft-lac.vercel.app/.well-known/security.txt
+Policy: https://github.com/akshayurs/promptwars_5/blob/main/SECURITY.md
