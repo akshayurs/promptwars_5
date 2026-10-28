@@ -1,18 +1,17 @@
 import { sumAllocated } from "@/lib/budget";
+import { countBy } from "@/lib/collections";
 import { daysBetween, todayIso } from "@/lib/dates";
-import { compareMilestones } from "@/lib/milestones";
+import { NON_SUPPLIER_BUDGET_WORDS } from "@/lib/constants";
+import { randomId, type IdFactory } from "@/lib/ids";
+import { orderTimeline } from "@/lib/milestones";
 import { floorMoney } from "@/lib/money";
-import type { GeneratedPlan, Intake, Milestone, Plan, Vendor } from "@/lib/schema";
-
-type IdFactory = () => string;
-
-const defaultIds: IdFactory = () => crypto.randomUUID();
+import type { GeneratedPlan, Intake, Plan } from "@/lib/schema";
 
 const withIds = <T>(items: readonly T[], nextId: IdFactory): Array<T & { id: string }> =>
   items.map((item) => ({ ...item, id: nextId() }));
 
 /** Turns model output into a fresh plan: new ids, nothing booked and nothing done. */
-export const toPlan = (generated: GeneratedPlan, nextId: IdFactory = defaultIds): Plan => ({
+export const toPlan = (generated: GeneratedPlan, nextId: IdFactory = randomId): Plan => ({
   summary: generated.summary,
   budget: withIds(generated.budget, nextId),
   timeline: withIds(generated.timeline, nextId).map((milestone) => ({ ...milestone, done: false })),
@@ -21,9 +20,11 @@ export const toPlan = (generated: GeneratedPlan, nextId: IdFactory = defaultIds)
 });
 
 /** Scales budget lines down proportionally (floored to minor units) when they exceed the total. */
-export const fitBudgetToTotal = (generated: GeneratedPlan, totalBudget: number): GeneratedPlan => {
+const fitBudgetToTotal = (generated: GeneratedPlan, totalBudget: number): GeneratedPlan => {
   const allocated = sumAllocated(generated.budget);
-  if (allocated <= totalBudget) return generated;
+  if (allocated <= totalBudget) {
+    return generated;
+  }
   const ratio = totalBudget / allocated;
   return {
     ...generated,
@@ -33,21 +34,18 @@ export const fitBudgetToTotal = (generated: GeneratedPlan, totalBudget: number):
 
 /**
  * Caps every milestone at the days remaining so none lands in the past, then orders the timeline
- * by phase and chronologically within each phase (stable, so ties keep the model's order).
+ * chronologically with phases that only move forward (see orderTimeline).
  */
-export const clampMilestones = (
-  generated: GeneratedPlan,
-  daysUntilEvent: number,
-): GeneratedPlan => {
+const clampMilestones = (generated: GeneratedPlan, daysUntilEvent: number): GeneratedPlan => {
   const latest = Math.max(daysUntilEvent, 0);
   return {
     ...generated,
-    timeline: generated.timeline
-      .map((milestone) => ({
+    timeline: orderTimeline(
+      generated.timeline.map((milestone) => ({
         ...milestone,
         daysBeforeEvent: Math.min(milestone.daysBeforeEvent, latest),
-      }))
-      .toSorted(compareMilestones),
+      })),
+    ),
   };
 };
 
@@ -62,56 +60,83 @@ export const fitPlanToIntake = (
     daysBetween(today, intake.eventDate),
   );
 
-const normalise = (value: string): string => value.trim().toLowerCase();
-
-const countBy = (keys: readonly string[]): Map<string, number> => {
-  const counts = new Map<string, number>();
-  for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
-  return counts;
-};
+const normalize = (value: string): string => value.trim().toLowerCase();
 
 const takeOne = (pool: Map<string, number>, key: string): boolean => {
   const left = pool.get(key) ?? 0;
-  if (left === 0) return false;
+  if (left === 0) {
+    return false;
+  }
   pool.set(key, left - 1);
   return true;
 };
 
-const carryBookings = (previous: readonly Vendor[], next: readonly Vendor[]): Vendor[] => {
-  const booked = countBy(
-    previous.filter((vendor) => vendor.booked).map((vendor) => normalise(vendor.category)),
-  );
-  return next.map((vendor) => ({ ...vendor, booked: takeOne(booked, normalise(vendor.category)) }));
+type Carry<T> = {
+  flagged: (item: T) => boolean;
+  key: (item: T) => string;
+  apply: (item: T, matched: boolean) => T;
 };
 
-const carryCompletion = (
-  previous: readonly Milestone[],
-  next: readonly Milestone[],
-): Milestone[] => {
-  const done = countBy(
-    previous.filter((milestone) => milestone.done).map((milestone) => normalise(milestone.title)),
-  );
-  return next.map((milestone) => ({
-    ...milestone,
-    done: takeOne(done, normalise(milestone.title)),
-  }));
+// Each flagged previous item lends its flag to at most one next item with the same key.
+const carryOver = <T>(previous: readonly T[], next: readonly T[], carry: Carry<T>): T[] => {
+  const pool = countBy(previous.filter(carry.flagged).map((item) => normalize(carry.key(item))));
+  return next.map((item) => carry.apply(item, takeOne(pool, normalize(carry.key(item)))));
 };
 
 /**
- * Builds the refined plan, carrying bookings (by vendor category) and completion (by milestone
- * title) over from the previous plan; matches ignore case and surrounding spaces.
+ * Builds the refined plan, carrying bookings (by vendor category), completion (by milestone
+ * title) and planner-added budget lines (by category) over from the previous plan; matches
+ * ignore case and surrounding spaces.
  */
 export const mergeRefinedPlan = (
   previous: Plan,
   generated: GeneratedPlan,
-  nextId: IdFactory = defaultIds,
+  nextId: IdFactory = randomId,
 ): Plan => {
   const fresh = toPlan(generated, nextId);
   return {
     ...fresh,
-    vendors: carryBookings(previous.vendors, fresh.vendors),
-    timeline: carryCompletion(previous.timeline, fresh.timeline),
+    budget: carryOver(previous.budget, fresh.budget, {
+      flagged: (line) => line.addedByUser === true,
+      key: (line) => line.category,
+      apply: (line, matched) => (matched ? { ...line, addedByUser: true } : line),
+    }),
+    vendors: carryOver(previous.vendors, fresh.vendors, {
+      flagged: (vendor) => vendor.booked,
+      key: (vendor) => vendor.category,
+      apply: (vendor, booked) => ({ ...vendor, booked }),
+    }),
+    timeline: carryOver(previous.timeline, fresh.timeline, {
+      flagged: (milestone) => milestone.done,
+      key: (milestone) => milestone.title,
+      apply: (milestone, done) => ({ ...milestone, done }),
+    }),
   };
+};
+
+const NON_SUPPLIER_WORDS: ReadonlySet<string> = new Set(NON_SUPPLIER_BUDGET_WORDS);
+
+// A line pays an outside supplier unless it is empty or a held-back reserve such as contingency.
+const paysSupplier = ({ category, amount }: GeneratedPlan["budget"][number]): boolean =>
+  amount > 0 &&
+  !normalize(category)
+    .split(/[^\p{L}\p{N}]+/u)
+    .some((word) => NON_SUPPLIER_WORDS.has(word));
+
+/**
+ * Categories of supplier budget lines that no vendor serves. A vendor serves the line its
+ * budgetCategory names, or the line sharing its own category; matches ignore case and spaces.
+ */
+export const uncoveredBudgetCategories = (generated: GeneratedPlan): string[] => {
+  const served = new Set(
+    generated.vendors.flatMap((vendor) => [
+      normalize(vendor.budgetCategory),
+      normalize(vendor.category),
+    ]),
+  );
+  return generated.budget
+    .filter((line) => paysSupplier(line) && !served.has(normalize(line.category)))
+    .map((line) => line.category);
 };
 
 /** Number of added, removed or changed items per plan section. */

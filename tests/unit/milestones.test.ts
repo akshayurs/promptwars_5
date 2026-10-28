@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  compareMilestones,
   groupMilestonesByPhase,
   milestoneProgress,
   nextMilestone,
+  orderTimeline,
   toggleMilestone,
 } from "@/lib/milestones";
 import type { Milestone } from "@/lib/schema";
@@ -29,11 +29,9 @@ describe("toggleMilestone", () => {
     expect(toggled[1]).toBe(timeline[1]);
   });
 
-  it("returns an equal copy for an unknown id", () => {
+  it("returns the same array for an unknown id", () => {
     const timeline = [milestone()];
-    const result = toggleMilestone(timeline, "missing");
-    expect(result).toEqual(timeline);
-    expect(result).not.toBe(timeline);
+    expect(toggleMilestone(timeline, "missing")).toBe(timeline);
   });
 });
 
@@ -112,25 +110,80 @@ describe("groupMilestonesByPhase", () => {
     expect(groups[0]?.milestones.map((m) => m.title)).toEqual(["b-big", "b-small"]);
   });
 
+  it("keeps groups chronological when a stored phase moves backwards", () => {
+    const late = milestone({ phase: "planning", daysBeforeEvent: 20, title: "late planning" });
+    const groups = groupMilestonesByPhase([
+      late,
+      milestone({ phase: "booking", daysBeforeEvent: 60, title: "book" }),
+      milestone({ phase: "planning", daysBeforeEvent: 90, title: "plan" }),
+    ]);
+    expect(groups.map((g) => [g.phase, g.milestones.map((m) => m.title)])).toEqual([
+      ["planning", ["plan"]],
+      ["booking", ["book", "late planning"]],
+    ]);
+    expect(groups[1]?.milestones[1]?.id).toBe(late.id);
+  });
+
   it("returns an empty array for an empty timeline", () => {
     expect(groupMilestonesByPhase([])).toEqual([]);
   });
 });
 
-describe("compareMilestones", () => {
-  it("orders by canonical phase before days", () => {
+describe("orderTimeline comparison", () => {
+  const days = (timeline: ReadonlyArray<{ daysBeforeEvent: number }>): number[] =>
+    timeline.map((item) => item.daysBeforeEvent);
+
+  it("orders by days before the event before phase", () => {
     const planning = { phase: "planning", daysBeforeEvent: 1 } as const;
     const booking = { phase: "booking", daysBeforeEvent: 300 } as const;
-    expect(compareMilestones(planning, booking)).toBeLessThan(0);
-    expect(compareMilestones(booking, planning)).toBeGreaterThan(0);
+    expect(days(orderTimeline([planning, booking]))).toEqual([300, 1]);
+  });
+
+  it("breaks day ties by canonical phase", () => {
+    const planning = { key: "plan", phase: "planning", daysBeforeEvent: 30 } as const;
+    const booking = { key: "book", phase: "booking", daysBeforeEvent: 30 } as const;
+    expect(orderTimeline([booking, planning]).map((item) => item.key)).toEqual(["plan", "book"]);
   });
 
   it("puts the milestone with more days before the event first within a phase", () => {
-    const early = { phase: "booking", daysBeforeEvent: 90 } as const;
-    const late = { phase: "booking", daysBeforeEvent: 30 } as const;
-    expect(compareMilestones(early, late)).toBeLessThan(0);
-    expect(compareMilestones(late, early)).toBeGreaterThan(0);
-    expect(compareMilestones(early, { ...early })).toBe(0);
+    const early = { key: "early", phase: "booking", daysBeforeEvent: 90 } as const;
+    const late = { key: "late", phase: "booking", daysBeforeEvent: 30 } as const;
+    const twin = { ...early, key: "twin" };
+    expect(orderTimeline([late, early, twin]).map((item) => item.key)).toEqual([
+      "early",
+      "twin",
+      "late",
+    ]);
+  });
+});
+
+describe("orderTimeline", () => {
+  it("sorts stably by days and raises each phase to the latest one before it", () => {
+    const steps = [
+      { title: "a", phase: "booking", daysBeforeEvent: 50 },
+      { title: "b", phase: "planning", daysBeforeEvent: 50 },
+      { title: "c", phase: "booking", daysBeforeEvent: 50 },
+      { title: "d", phase: "planning", daysBeforeEvent: 10 },
+      { title: "e", phase: "event-day", daysBeforeEvent: 0 },
+    ] as const;
+    expect(orderTimeline(steps).map((m) => `${m.title}:${m.phase}`)).toEqual([
+      "b:planning",
+      "a:booking",
+      "c:booking",
+      "d:booking",
+      "e:event-day",
+    ]);
+  });
+
+  it("returns untouched milestones by reference and never mutates the input", () => {
+    const steps = [
+      { phase: "planning", daysBeforeEvent: 5 },
+      { phase: "booking", daysBeforeEvent: 9 },
+    ] as const;
+    const ordered = orderTimeline(steps);
+    expect(ordered[0]).toBe(steps[1]);
+    expect(ordered[1]).not.toBe(steps[0]);
+    expect(steps[0].phase).toBe("planning");
   });
 });
 

@@ -1,4 +1,10 @@
-import { ApiError, FinishReason } from "@google/genai";
+import {
+  ApiError,
+  BlockedReason,
+  FinishReason,
+  HarmBlockThreshold,
+  HarmCategory,
+} from "@google/genai";
 import { describe, expect, it, vi } from "vitest";
 
 import { API } from "@/lib/constants";
@@ -46,7 +52,9 @@ const failureOf = async (promise: Promise<unknown>): Promise<PlanGenerationError
   try {
     await promise;
   } catch (error) {
-    if (error instanceof PlanGenerationError) return error;
+    if (error instanceof PlanGenerationError) {
+      return error;
+    }
     throw error;
   }
   throw new Error("expected rejection");
@@ -158,6 +166,31 @@ describe("createPlanGenerator.generate", () => {
     expect(generateContent).toHaveBeenCalledTimes(1);
   });
 
+  it("sets explicit medium-and-above safety thresholds for every harm category", async () => {
+    const { generateContent, generator } = setup();
+    generateContent.mockResolvedValue(good());
+    await generator.generate(makeIntake(), context());
+    const block = HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE;
+    expect(generateContent.mock.calls[0]?.[0].config?.safetySettings).toEqual([
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: block },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: block },
+      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: block },
+      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: block },
+    ]);
+  });
+
+  it("maps a safety-blocked prompt to upstream without retrying", async () => {
+    const { generateContent, generator } = setup();
+    generateContent.mockResolvedValue({
+      text: undefined,
+      promptFeedback: { blockReason: BlockedReason.SAFETY },
+    } as Reply);
+    const error = await failureOf(generator.generate(makeIntake(), context()));
+    expect(error.code).toBe("upstream");
+    expect(error.message).toBe("Model stopped before completing the plan");
+    expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
   it("sends a Gemini-compatible response schema", async () => {
     const { generateContent, generator } = setup();
     generateContent.mockResolvedValue(good());
@@ -166,6 +199,18 @@ describe("createPlanGenerator.generate", () => {
     expect(schema).not.toMatch(
       /"(\$schema|minLength|maxLength|minimum|maximum|minItems|maxItems)"/,
     );
+  });
+
+  it("requires a budgetCategory on every vendor in the response schema", async () => {
+    const { generateContent, generator } = setup();
+    generateContent.mockResolvedValue(good());
+    await generator.generate(makeIntake(), context());
+    const schema = generateContent.mock.calls[0]?.[0].config?.responseJsonSchema as {
+      properties: { vendors: { items: { required: string[]; properties: object } } };
+    };
+    const vendor = schema.properties.vendors.items;
+    expect(vendor.required).toContain("budgetCategory");
+    expect(vendor.properties).toHaveProperty("budgetCategory.description");
   });
 
   it("succeeds when the retry returns a valid plan", async () => {
@@ -281,5 +326,115 @@ describe("createPlanGenerator defaults", () => {
 describe("createGeminiClient", () => {
   it("returns an object with models", () => {
     expect(createGeminiClient("fake-test-value")).toHaveProperty("models");
+  });
+});
+
+describe("createPlanGenerator vendor coverage", () => {
+  const withGap = () =>
+    makeGeneratedPlan({
+      budget: [
+        ...makeGeneratedPlan().budget,
+        { category: "Photography", amount: 1, rationale: "Photos" },
+        { category: "Music", amount: 1, rationale: "Band" },
+      ],
+    });
+  const covered = () => {
+    const plan = withGap();
+    return {
+      ...plan,
+      vendors: [
+        ...plan.vendors,
+        {
+          category: "Photographer",
+          whyNeeded: "w",
+          questionsToAsk: ["q"],
+          budgetCategory: "Photography",
+        },
+        { category: "Band", whyNeeded: "w", questionsToAsk: ["q"], budgetCategory: "Music" },
+      ],
+    };
+  };
+  const json = (plan: object) => reply(JSON.stringify(plan));
+
+  it("retries once with a note naming the uncovered lines and returns the covered plan", async () => {
+    const { generateContent, generator, logs } = setup();
+    generateContent.mockResolvedValueOnce(json(withGap())).mockResolvedValueOnce(json(covered()));
+    expect(await generator.generate(makeIntake(), context())).toEqual(covered());
+    expect(generateContent).toHaveBeenCalledTimes(2);
+    const retry = generateContent.mock.calls[1]?.[0];
+    expect(retry?.contents).toContain(generateContent.mock.calls[0]?.[0].contents as string);
+    expect(retry?.contents).toContain('<uncovered>\n["Photography","Music"]\n</uncovered>');
+    expect(logs()).toContainEqual(
+      expect.objectContaining({
+        message: "vendor coverage gap",
+        uncovered: 2,
+        operation: "generate",
+      }),
+    );
+    expect(
+      logs()
+        .filter((log) => log.message === "model call")
+        .map((log) => log.attempt),
+    ).toEqual([1, 2]);
+  });
+
+  it("returns the retry when it is no worse, even if a gap remains", async () => {
+    const { generateContent, generator } = setup();
+    const stillOne = { ...covered(), vendors: covered().vendors.slice(0, -1) };
+    generateContent.mockResolvedValueOnce(json(withGap())).mockResolvedValueOnce(json(stillOne));
+    expect(await generator.refine(refineRequest(), context())).toEqual(stillOne);
+    expect(generateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the first plan when the retry leaves more lines uncovered", async () => {
+    const { generateContent, generator, logs } = setup();
+    const worse = {
+      ...withGap(),
+      vendors: withGap().vendors.map((vendor) => ({
+        ...vendor,
+        category: `${vendor.category} extra`,
+        budgetCategory: "Other",
+      })),
+    };
+    generateContent.mockResolvedValueOnce(json(withGap())).mockResolvedValueOnce(json(worse));
+    expect(await generator.generate(makeIntake(), context())).toEqual(withGap());
+    expect(generateContent).toHaveBeenCalledTimes(2);
+    expect(logs()).not.toContainEqual(expect.objectContaining({ level: "warn" }));
+  });
+
+  it.each([
+    ["malformed", reply("{oops")],
+    ["busy", new ApiError({ message: "high demand", status: 503 })],
+  ])("keeps the first plan and logs when the retry fails as %s", async (code, outcome) => {
+    const { generateContent, generator, logs } = setup();
+    generateContent.mockResolvedValueOnce(json(withGap()));
+    if (outcome instanceof Error) {
+      generateContent.mockRejectedValueOnce(outcome);
+    } else {
+      generateContent.mockResolvedValueOnce(outcome);
+    }
+    expect(await generator.generate(makeIntake(), context())).toEqual(withGap());
+    expect(generateContent).toHaveBeenCalledTimes(2);
+    expect(logs()).toContainEqual(
+      expect.objectContaining({ level: "warn", message: "vendor coverage retry failed", code }),
+    );
+  });
+
+  it("never makes a third call after a malformed reply was already retried", async () => {
+    const { generateContent, generator } = setup();
+    generateContent.mockResolvedValueOnce(reply("nope")).mockResolvedValueOnce(json(withGap()));
+    expect(await generator.generate(makeIntake(), context())).toEqual(withGap());
+    expect(generateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry for coverage once the request is aborted", async () => {
+    const { generateContent, generator } = setup();
+    const controller = new AbortController();
+    generateContent.mockImplementation(() => {
+      controller.abort();
+      return Promise.resolve(json(withGap()));
+    });
+    expect(await generator.generate(makeIntake(), context(controller.signal))).toEqual(withGap());
+    expect(generateContent).toHaveBeenCalledTimes(1);
   });
 });

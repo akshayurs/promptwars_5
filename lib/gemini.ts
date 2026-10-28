@@ -1,32 +1,17 @@
 import "server-only";
 
-import {
-  ApiError,
-  FinishReason,
-  GoogleGenAI,
-  type GenerateContentResponse,
-  type GenerateContentResponseUsageMetadata,
-} from "@google/genai";
+import { GoogleGenAI, HarmBlockThreshold, HarmCategory, type SafetySetting } from "@google/genai";
 import { API } from "@/lib/constants";
 import { systemClock, toIsoDay, type Clock } from "@/lib/dates";
 import { toGeminiResponseSchema } from "@/lib/geminiSchema";
+import { parseGenerated, toGenerationError, usageFields } from "@/lib/geminiResponse";
+import { GeneratedPlanSchema } from "@/lib/generatedPlanSchema";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import { buildPlanPrompt, buildRefinePrompt, type Prompt } from "@/lib/prompts";
-import { GeneratedPlanSchema, LenientGeneratedPlanSchema } from "@/lib/generatedPlanSchema";
+import { uncoveredBudgetCategories } from "@/lib/plan";
+import { buildPlanPrompt, buildRefinePrompt, withCoverageNote, type Prompt } from "@/lib/prompts";
 import type { GeneratedPlan, Intake, RefineRequest } from "@/lib/schema";
 
-export type PlanGenerationFailure = "timeout" | "malformed" | "upstream" | "busy";
-
-export class PlanGenerationError extends Error {
-  constructor(
-    public readonly code: PlanGenerationFailure,
-    message: string,
-    public readonly upstreamStatus?: number,
-  ) {
-    super(message);
-    this.name = "PlanGenerationError";
-  }
-}
+export { PlanGenerationError } from "@/lib/geminiResponse";
 
 export type ModelClient = Pick<GoogleGenAI, "models">;
 
@@ -40,74 +25,29 @@ export type PlanGenerator = {
 export type PlanGeneratorOptions = { clock?: Clock; logger?: Logger };
 
 type Operation = keyof typeof API.geminiTemperature;
+type Attempt = { context: GenerationContext; attempt: number };
 
 const RESPONSE_JSON_SCHEMA = toGeminiResponseSchema(GeneratedPlanSchema);
-const BUSY_STATUSES: ReadonlySet<number> = new Set<number>(API.geminiBusyStatuses);
 
-const parseGenerated = (response: GenerateContentResponse): GeneratedPlan => {
-  const finishReason = response.candidates?.[0]?.finishReason;
-  if (finishReason !== undefined && finishReason !== FinishReason.STOP) {
-    throw new PlanGenerationError("upstream", "Model stopped before completing the plan");
-  }
-  const { text } = response;
-  if (text === undefined || text.length === 0) {
-    throw new PlanGenerationError("malformed", "Model returned an empty response");
-  }
-  let candidate: unknown;
-  try {
-    candidate = JSON.parse(text);
-  } catch {
-    throw new PlanGenerationError("malformed", "Model returned invalid JSON");
-  }
-  const parsed = LenientGeneratedPlanSchema.safeParse(candidate);
-  if (!parsed.success) {
-    throw new PlanGenerationError("malformed", "Model response did not match the plan schema");
-  }
-  return parsed.data;
-};
+const SAFETY_SETTINGS: SafetySetting[] = [
+  HarmCategory.HARM_CATEGORY_HARASSMENT,
+  HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+  HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+  HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+].map((category) => ({ category, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }));
 
-const toGenerationError = (error: unknown): PlanGenerationError => {
-  if (error instanceof PlanGenerationError) {
-    return error;
-  }
-  if (error instanceof Error && error.name === "AbortError") {
-    return new PlanGenerationError("timeout", "Plan generation timed out");
-  }
-  if (!(error instanceof ApiError)) {
-    return new PlanGenerationError("upstream", "Plan generation service is unavailable");
-  }
-  if (BUSY_STATUSES.has(error.status)) {
-    return new PlanGenerationError(
-      "busy",
-      "The planning model is busy. Please try again in a moment.",
-      error.status,
-    );
-  }
-  return new PlanGenerationError(
-    "upstream",
-    "Plan generation service is unavailable",
-    error.status,
-  );
-};
+// Malformed replies and vendor-coverage gaps share one retry budget.
+const canRetry = ({ context, attempt }: Attempt): boolean =>
+  attempt <= API.geminiMalformedRetries && !context.signal.aborted;
 
-const usageFields = (
-  usage: GenerateContentResponseUsageMetadata | undefined,
-): Record<string, number> => ({
-  promptTokens: usage?.promptTokenCount ?? 0,
-  candidateTokens: usage?.candidatesTokenCount ?? 0,
-  thoughtTokens: usage?.thoughtsTokenCount ?? 0,
-  totalTokens: usage?.totalTokenCount ?? 0,
-});
+type CallModel = (operation: Operation, prompt: Prompt, call: Attempt) => Promise<GeneratedPlan>;
 
-/** Plan generator over the Gemini client: structured output, one retry on malformed replies. */
-export const createPlanGenerator = (
-  client: ModelClient,
-  { clock = systemClock, logger = defaultLogger }: PlanGeneratorOptions = {},
-): PlanGenerator => {
-  const callModel = async (
+const createModelCaller =
+  (client: ModelClient, { clock, logger }: Required<PlanGeneratorOptions>): CallModel =>
+  async (
     operation: Operation,
     prompt: Prompt,
-    { context, attempt }: { context: GenerationContext; attempt: number },
+    { context, attempt }: Attempt,
   ): Promise<GeneratedPlan> => {
     const startedAt = clock().getTime();
     const response = await client.models.generateContent({
@@ -117,6 +57,7 @@ export const createPlanGenerator = (
         systemInstruction: prompt.system,
         responseMimeType: "application/json",
         responseJsonSchema: RESPONSE_JSON_SCHEMA,
+        safetySettings: SAFETY_SETTINGS,
         temperature: API.geminiTemperature[operation],
         maxOutputTokens: API.geminiMaxOutputTokens,
         thinkingConfig: { thinkingBudget: API.geminiThinkingBudget },
@@ -133,24 +74,60 @@ export const createPlanGenerator = (
     return parseGenerated(response);
   };
 
+/**
+ * Plan generator over the Gemini client: structured output, explicit safety thresholds and one
+ * retry, spent on a malformed reply or on budget lines left without a vendor.
+ */
+export const createPlanGenerator = (
+  client: ModelClient,
+  { clock = systemClock, logger = defaultLogger }: PlanGeneratorOptions = {},
+): PlanGenerator => {
+  const callModel = createModelCaller(client, { clock, logger });
+
+  // A valid plan is never lost: a failed or worse coverage retry returns the first plan.
+  const coverVendors = async (
+    operation: Operation,
+    prompt: Prompt,
+    { plan, ...call }: Attempt & { plan: GeneratedPlan },
+  ): Promise<GeneratedPlan> => {
+    const uncovered = uncoveredBudgetCategories(plan);
+    if (uncovered.length === 0 || !canRetry(call)) {
+      return plan;
+    }
+    const { correlationId } = call.context;
+    logger.info("vendor coverage gap", { correlationId, operation, uncovered: uncovered.length });
+    try {
+      const retried = await callModel(operation, withCoverageNote(prompt, uncovered), {
+        context: call.context,
+        attempt: call.attempt + 1,
+      });
+      return uncoveredBudgetCategories(retried).length <= uncovered.length ? retried : plan;
+    } catch (error) {
+      logger.warn("vendor coverage retry failed", {
+        correlationId,
+        code: toGenerationError(error).code,
+      });
+      return plan;
+    }
+  };
+
   const callWithRetry = async (
     operation: Operation,
     prompt: Prompt,
     context: GenerationContext,
   ): Promise<GeneratedPlan> => {
     for (let attempt = 1; ; attempt += 1) {
+      let plan: GeneratedPlan;
       try {
-        return await callModel(operation, prompt, { context, attempt });
+        plan = await callModel(operation, prompt, { context, attempt });
       } catch (error) {
         const failure = toGenerationError(error);
-        const retryable =
-          failure.code === "malformed" &&
-          attempt <= API.geminiMalformedRetries &&
-          !context.signal.aborted;
-        if (!retryable) {
+        if (failure.code !== "malformed" || !canRetry({ context, attempt })) {
           throw failure;
         }
+        continue;
       }
+      return coverVendors(operation, prompt, { context, attempt, plan });
     }
   };
 

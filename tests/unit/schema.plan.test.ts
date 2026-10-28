@@ -15,7 +15,9 @@ describe("GeneratedPlanSchema", () => {
   const [milestone] = base.timeline;
   const [vendor] = base.vendors;
   const [idea] = base.ideas;
-  if (!line || !milestone || !vendor || !idea) throw new Error("fixture");
+  if (!line || !milestone || !vendor || !idea) {
+    throw new Error("fixture");
+  }
 
   it("accepts a valid plan", () => {
     expect(GeneratedPlanSchema.safeParse(base).success).toBe(true);
@@ -46,7 +48,10 @@ describe("GeneratedPlanSchema", () => {
     expect(GeneratedPlanSchema.safeParse(bad).success).toBe(false);
     const days = {
       ...base,
-      timeline: [{ ...milestone, daysBeforeEvent: 1096 }, ...base.timeline.slice(1)],
+      timeline: [
+        { ...milestone, daysBeforeEvent: LIMITS.maxDaysBeforeEvent + 1 },
+        ...base.timeline.slice(1),
+      ],
     };
     expect(GeneratedPlanSchema.safeParse(days).success).toBe(false);
     const frac = {
@@ -80,7 +85,9 @@ describe("LenientGeneratedPlanSchema", () => {
   const [line] = base.budget;
   const [vendor] = base.vendors;
   const [idea] = base.ideas;
-  if (!line || !vendor || !idea) throw new Error("fixture");
+  if (!line || !vendor || !idea) {
+    throw new Error("fixture");
+  }
 
   it("accepts a valid plan unchanged", () => {
     expect(LenientGeneratedPlanSchema.parse(base)).toEqual(base);
@@ -110,6 +117,20 @@ describe("LenientGeneratedPlanSchema", () => {
     expect(parsed.vendors[0]?.questionsToAsk).toHaveLength(LIMITS.questionsPerVendor);
   });
 
+  it("clamps day counts beyond the planning horizon instead of rejecting", () => {
+    const [first, ...rest] = base.timeline;
+    if (!first) {
+      throw new Error("fixture");
+    }
+    const far = LIMITS.maxDaysBeforeEvent + 40;
+    const parsed = LenientGeneratedPlanSchema.parse({
+      ...base,
+      timeline: [{ ...first, daysBeforeEvent: far }, ...rest],
+    });
+    expect(parsed.timeline[0]?.daysBeforeEvent).toBe(LIMITS.maxDaysBeforeEvent);
+    expect(GeneratedPlanSchema.safeParse(parsed).success).toBe(true);
+  });
+
   it("still rejects minimum violations", () => {
     expect(LenientGeneratedPlanSchema.safeParse({ ...base, summary: "   " }).success).toBe(false);
     expect(
@@ -126,7 +147,9 @@ describe("PlanSchema", () => {
   it("rejects non-uuid ids", () => {
     const plan = makePlan();
     const [first, ...rest] = plan.budget;
-    if (!first) throw new Error("fixture");
+    if (!first) {
+      throw new Error("fixture");
+    }
     expect(
       PlanSchema.safeParse({ ...plan, budget: [{ ...first, id: "abc" }, ...rest] }).success,
     ).toBe(false);
@@ -135,7 +158,9 @@ describe("PlanSchema", () => {
   it("requires vendor.booked", () => {
     const plan = makePlan();
     const [first, ...rest] = plan.vendors;
-    if (!first) throw new Error("fixture");
+    if (!first) {
+      throw new Error("fixture");
+    }
     const unbooked: Record<string, unknown> = { ...first };
     delete unbooked.booked;
     expect(PlanSchema.safeParse({ ...plan, vendors: [unbooked, ...rest] }).success).toBe(false);

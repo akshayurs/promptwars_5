@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  clampMilestones,
   diffPlans,
-  fitBudgetToTotal,
   fitPlanToIntake,
   mergeRefinedPlan,
   toPlan,
+  uncoveredBudgetCategories,
 } from "@/lib/plan";
-import { DAY_MS } from "@/lib/constants";
-import { toIsoDay } from "@/lib/dates";
+import { DAY_MS, LIMITS } from "@/lib/constants";
+import { shiftDate, toIsoDay } from "@/lib/dates";
 import { PlanSchema, type GeneratedPlan } from "@/lib/schema";
 
 import { makeGeneratedPlan, makePlan } from "./fixtures";
@@ -113,6 +112,37 @@ describe("mergeRefinedPlan", () => {
     expect(merged.timeline.every((m) => !m.done)).toBe(true);
   });
 
+  it("keeps the planner-added flag on lines the model kept, matched once by category", () => {
+    const previous = makePlan();
+    previous.budget[0] = { ...previous.budget[0]!, category: "Mehendi", addedByUser: true };
+    previous.budget[1] = { ...previous.budget[1]!, addedByUser: false };
+    const generated = makeGeneratedPlan();
+    generated.budget = [
+      { category: " mehendi ", amount: 10, rationale: "Henna" },
+      { category: "MEHENDI", amount: 10, rationale: "Henna again" },
+      { category: "Catering", amount: 10, rationale: "Food" },
+    ];
+    const merged = mergeRefinedPlan(previous, generated, counterIds());
+    expect(merged.budget.map((line) => line.addedByUser)).toEqual([true, undefined, undefined]);
+    expect(merged.budget[1]).not.toHaveProperty("addedByUser");
+  });
+
+  it("drops the planner-added flag when the model removed that line", () => {
+    const previous = makePlan();
+    previous.budget[0] = { ...previous.budget[0]!, category: "Mehendi", addedByUser: true };
+    const merged = mergeRefinedPlan(previous, makeGeneratedPlan(), counterIds());
+    expect(merged.budget.some((line) => line.addedByUser)).toBe(false);
+  });
+
+  it("keeps each vendor's linked budget category", () => {
+    const merged = mergeRefinedPlan(makePlan(), makeGeneratedPlan(), counterIds());
+    expect(merged.vendors.map((vendor) => vendor.budgetCategory)).toEqual([
+      "Catering",
+      "Decor",
+      "Venue",
+    ]);
+  });
+
   it("defaults to random ids", () => {
     const merged = mergeRefinedPlan(makePlan(), makeGeneratedPlan());
     expect(PlanSchema.safeParse(merged).success).toBe(true);
@@ -159,11 +189,28 @@ describe("diffPlans", () => {
   });
 });
 
-describe("fitBudgetToTotal", () => {
-  it("returns the plan unchanged when the budget fits", () => {
+const TODAY = "2030-01-01";
+
+// Both rules run through fitPlanToIntake; each helper leaves the other rule with nothing to do.
+const fitBudgetToTotal = (generated: GeneratedPlan, totalBudget: number): GeneratedPlan =>
+  fitPlanToIntake(
+    generated,
+    { eventDate: shiftDate(TODAY, LIMITS.maxDaysBeforeEvent), totalBudget },
+    TODAY,
+  );
+
+const clampMilestones = (generated: GeneratedPlan, daysUntilEvent: number): GeneratedPlan =>
+  fitPlanToIntake(
+    generated,
+    { eventDate: shiftDate(TODAY, daysUntilEvent), totalBudget: LIMITS.maxBudget },
+    TODAY,
+  );
+
+describe("fitPlanToIntake budget fit", () => {
+  it("keeps the budget lines unchanged when the budget fits", () => {
     const generated = makeGeneratedPlan();
-    expect(fitBudgetToTotal(generated, 400_000)).toBe(generated);
-    expect(fitBudgetToTotal(generated, 1_000_000)).toBe(generated);
+    expect(fitBudgetToTotal(generated, 400_000).budget).toBe(generated.budget);
+    expect(fitBudgetToTotal(generated, 1_000_000).budget).toBe(generated.budget);
   });
 
   it("scales amounts proportionally so the sum fits the total", () => {
@@ -188,12 +235,13 @@ describe("fitBudgetToTotal", () => {
   it("keeps other plan sections intact", () => {
     const generated = makeGeneratedPlan();
     const fitted = fitBudgetToTotal(generated, 10);
-    expect(fitted.timeline).toBe(generated.timeline);
+    expect(fitted.vendors).toBe(generated.vendors);
+    expect(fitted.ideas).toBe(generated.ideas);
     expect(fitted.budget[0]?.rationale).toBe(generated.budget[0]?.rationale);
   });
 });
 
-describe("clampMilestones", () => {
+describe("fitPlanToIntake milestone clamp", () => {
   type GeneratedMilestone = GeneratedPlan["timeline"][number];
   const step = (title: string, phase: GeneratedMilestone["phase"], days: number) => ({
     title,
@@ -206,6 +254,40 @@ describe("clampMilestones", () => {
   it("caps daysBeforeEvent at the days remaining", () => {
     const clamped = clampMilestones(makeGeneratedPlan(), 30);
     expect(clamped.timeline.map((m) => m.daysBeforeEvent)).toEqual([30, 30, 14, 0]);
+  });
+
+  it("orders the timeline by days and raises phases that would move backwards", () => {
+    const generated = makeGeneratedPlan({
+      timeline: [
+        step("Send invites", "planning", 30),
+        step("Book caterer", "booking", 120),
+        step("Set budget", "planning", 150),
+        step("Rehearse", "event-day", 2),
+        step("Confirm", "final-prep", 1),
+        step("Day of", "event-day", 0),
+      ],
+    });
+    const clamped = clampMilestones(generated, 400);
+    expect(clamped.timeline.map((m) => [m.title, m.phase])).toEqual([
+      ["Set budget", "planning"],
+      ["Book caterer", "booking"],
+      ["Send invites", "booking"],
+      ["Rehearse", "event-day"],
+      ["Confirm", "event-day"],
+      ["Day of", "event-day"],
+    ]);
+    expect(generated.timeline[0]?.phase).toBe("planning");
+  });
+
+  it("breaks day ties by phase so a clamped planning step stays first", () => {
+    const generated = makeGeneratedPlan({
+      timeline: [
+        step("Book", "booking", 90),
+        step("Plan", "planning", 90),
+        step("Day", "event-day", 0),
+      ],
+    });
+    expect(titles(clampMilestones(generated, 400))).toEqual(["Plan", "Book", "Day"]);
   });
 
   it("keeps reachable milestones' days and orders them by phase", () => {
@@ -281,5 +363,52 @@ describe("fitPlanToIntake", () => {
     const eventDate = toIsoDay(Date.now() + 10 * DAY_MS);
     const fitted = fitPlanToIntake(makeGeneratedPlan(), { eventDate, totalBudget: 1e9 });
     expect(fitted.timeline.map((m) => m.daysBeforeEvent)).toEqual([10, 10, 10, 0]);
+  });
+});
+
+describe("uncoveredBudgetCategories", () => {
+  const vendor = (category: string, budgetCategory: string) => ({
+    category,
+    budgetCategory,
+    whyNeeded: "w",
+    questionsToAsk: ["q"],
+  });
+  const line = (category: string, amount = 100) => ({ category, amount, rationale: "r" });
+
+  it("reports nothing when every supplier line has a vendor", () => {
+    expect(uncoveredBudgetCategories(makeGeneratedPlan())).toEqual([]);
+  });
+
+  it("lists supplier lines with no vendor, in budget order", () => {
+    const generated = makeGeneratedPlan({
+      budget: [line("Venue"), line("Photography"), line("Catering"), line("Music")],
+      vendors: [vendor("Caterer", "Catering")],
+    });
+    expect(uncoveredBudgetCategories(generated)).toEqual(["Venue", "Photography", "Music"]);
+  });
+
+  it("matches budgetCategory or the vendor's own category, ignoring case and spaces", () => {
+    const generated = makeGeneratedPlan({
+      budget: [line("Venue & Catering"), line("Photography"), line("DJ")],
+      vendors: [vendor("Hall", "  venue & CATERING "), vendor("dj", "Entertainment")],
+    });
+    expect(uncoveredBudgetCategories(generated)).toEqual(["Photography"]);
+  });
+
+  it("skips reserves, buffers and zero-amount lines", () => {
+    const generated = makeGeneratedPlan({
+      budget: [
+        line("Contingency"),
+        line("Contingency Reserve"),
+        line("Misc. expenses"),
+        line("Miscellaneous"),
+        line("Buffer fund"),
+        line("Unallocated"),
+        line("Donated venue", 0),
+        line("Reservations desk staff"),
+      ],
+      vendors: [vendor("Caterer", "Catering")],
+    });
+    expect(uncoveredBudgetCategories(generated)).toEqual(["Reservations desk staff"]);
   });
 });

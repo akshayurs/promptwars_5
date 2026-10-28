@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { STORAGE_KEY, WORKSPACE_VERSION } from "@/lib/constants";
-import { RefineRequestSchema, StoredWorkspaceSchema } from "@/lib/schema";
+import {
+  createRefineRequestSchema,
+  RefineRequestSchema,
+  StoredWorkspaceSchema,
+} from "@/lib/schema";
 
 import { makeIntake, makePlan, makeWorkspace } from "./fixtures";
 
@@ -27,6 +31,13 @@ describe("RefineRequestSchema", () => {
     expect(message(rep(501))).toBe("Enter a change of at most 500 characters");
   });
 
+  it("keeps line breaks in the instruction", () => {
+    const instruction = "Cut the decor budget\nAdd a live band";
+    expect(RefineRequestSchema.parse({ ...valid, instruction }).instruction).toBe(instruction);
+    const windows = { ...valid, instruction: "Cut decor\r\nAdd a band" };
+    expect(RefineRequestSchema.parse(windows).instruction).toBe("Cut decor\nAdd a band");
+  });
+
   it("rejects unknown keys and missing plan", () => {
     expect(RefineRequestSchema.safeParse({ ...valid, extra: 1 }).success).toBe(false);
     expect(
@@ -35,15 +46,53 @@ describe("RefineRequestSchema", () => {
     ).toBe(false);
   });
 
-  it("accepts an intake whose date has already passed", () => {
-    const past = { ...valid, intake: makeIntake({ eventDate: "2001-01-01" }) };
-    expect(RefineRequestSchema.safeParse(past).success).toBe(true);
+  it("rejects an edited event date outside today to five years ahead", () => {
+    const at = (eventDate: string) =>
+      RefineRequestSchema.safeParse({ ...valid, intake: makeIntake({ eventDate }) });
+    expect(at("2001-01-01").error?.issues[0]).toMatchObject({
+      path: ["intake", "eventDate"],
+      message: "Choose an event date between today and 5 years from now",
+    });
+    expect(at("2099-01-01").success).toBe(false);
+  });
+
+  it("applies the window from the injected clock, keeping the one-day grace", () => {
+    const schema = createRefineRequestSchema(() => new Date("2030-03-10T12:00:00Z"));
+    const at = (eventDate: string) =>
+      schema.safeParse({ ...valid, intake: makeIntake({ eventDate }) }).success;
+    expect(at("2030-03-09")).toBe(true);
+    expect(at("2030-03-08")).toBe(false);
+    expect(at("2035-03-09")).toBe(true);
+    expect(at("2035-03-10")).toBe(false);
   });
 });
 
 describe("StoredWorkspaceSchema", () => {
   it("accepts a valid workspace", () => {
     expect(StoredWorkspaceSchema.safeParse(makeWorkspace()).success).toBe(true);
+  });
+
+  it("loads plans saved before vendor budget links and planner-added flags existed", () => {
+    const plan = makePlan();
+    const vendors = plan.vendors.map((vendor) => ({ ...vendor, budgetCategory: undefined }));
+    const legacy: unknown = JSON.parse(
+      JSON.stringify({ ...makeWorkspace(), plan: { ...plan, vendors } }),
+    );
+    const parsed = StoredWorkspaceSchema.safeParse(legacy);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.plan.vendors[0]).not.toHaveProperty("budgetCategory");
+    expect(parsed.data?.plan.budget[0]).not.toHaveProperty("addedByUser");
+  });
+
+  it("keeps the planner-added flag and rejects a non-boolean one", () => {
+    const plan = makePlan();
+    const flagged = (addedByUser: unknown) =>
+      StoredWorkspaceSchema.safeParse({
+        ...makeWorkspace(),
+        plan: { ...plan, budget: plan.budget.map((line) => ({ ...line, addedByUser })) },
+      });
+    expect(flagged(true).data?.plan.budget[0]?.addedByUser).toBe(true);
+    expect(flagged("yes").success).toBe(false);
   });
 
   it("accepts a stored previousPlan", () => {
