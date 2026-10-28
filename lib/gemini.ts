@@ -88,10 +88,11 @@ export const createPlanGenerator = (
   const coverVendors = async (
     operation: Operation,
     prompt: Prompt,
-    { plan, ...call }: Attempt & { plan: GeneratedPlan },
+    { plan, startedAt, ...call }: Attempt & { plan: GeneratedPlan; startedAt: number },
   ): Promise<GeneratedPlan> => {
     const uncovered = uncoveredBudgetCategories(plan);
-    if (uncovered.length === 0 || !canRetry(call)) {
+    const outOfTime = clock().getTime() - startedAt > API.coverageRetryMaxElapsedMs;
+    if (uncovered.length === 0 || outOfTime || !canRetry(call)) {
       return plan;
     }
     const { correlationId } = call.context;
@@ -116,6 +117,7 @@ export const createPlanGenerator = (
     prompt: Prompt,
     context: GenerationContext,
   ): Promise<GeneratedPlan> => {
+    const startedAt = clock().getTime();
     for (let attempt = 1; ; attempt += 1) {
       let plan: GeneratedPlan;
       try {
@@ -127,7 +129,7 @@ export const createPlanGenerator = (
         }
         continue;
       }
-      return coverVendors(operation, prompt, { context, attempt, plan });
+      return coverVendors(operation, prompt, { context, attempt, plan, startedAt });
     }
   };
 

@@ -378,6 +378,17 @@ describe("createPlanGenerator vendor coverage", () => {
     ).toEqual([1, 2]);
   });
 
+  it("skips the coverage retry when the first call used up the retry time budget", async () => {
+    let now = Date.parse("2030-01-01T10:00:00Z");
+    const { generateContent, generator } = setup(() => new Date(now));
+    generateContent.mockImplementationOnce(() => {
+      now += API.coverageRetryMaxElapsedMs + 1;
+      return Promise.resolve(json(withGap()));
+    });
+    expect(await generator.generate(makeIntake(), context())).toEqual(withGap());
+    expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
   it("returns the retry when it is no worse, even if a gap remains", async () => {
     const { generateContent, generator } = setup();
     const stillOne = { ...covered(), vendors: covered().vendors.slice(0, -1) };

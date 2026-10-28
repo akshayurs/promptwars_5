@@ -53,6 +53,8 @@ export const API = {
   geminiThinkingBudget: 512,
   geminiTemperature: { generate: 0.7, refine: 0.3 },
   geminiMalformedRetries: 1,
+  // Leaves room for a second call inside requestTimeoutMs.
+  coverageRetryMaxElapsedMs: 20_000,
   geminiBusyStatuses: [429, 503],
 } as const;
 
