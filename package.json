@@ -1,6 +1,6 @@
 {
   "name": "eventcraft",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "GenAI-powered planning assistant for weddings, birthdays and community events.",
   "license": "MIT",

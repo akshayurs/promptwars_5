@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-29
+
+### Fixed
+
+- The vendor-coverage retry runs only when the first model call finished within 20 seconds, so a retry cannot push a request past the timeout.
+- Refining a plan whose event date is outside the planning window explains the problem and points to Edit event details.
+- Documentation describes the shared single retry.
+
 ## [1.1.0] - 2026-10-29
 
 ### Added
@@ -57,6 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Budget amounts stay visible on narrow screens.
 - Turbopack build cache disabled to keep production builds reliable.
 
-[Unreleased]: https://github.com/akshayurs/promptwars_5/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/akshayurs/promptwars_5/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/akshayurs/promptwars_5/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/akshayurs/promptwars_5/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/akshayurs/promptwars_5/releases/tag/v1.0.0
