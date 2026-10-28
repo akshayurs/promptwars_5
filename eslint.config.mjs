@@ -46,6 +46,7 @@ export default defineConfig([
       "max-params": ["error", MAX_PARAMS],
       "no-nested-ternary": "error",
       "no-console": "error",
+      curly: ["error", "all"],
       eqeqeq: ["error", "always"],
       "prefer-const": "error",
       "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }],
