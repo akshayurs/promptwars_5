@@ -1,7 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
-import { expect, makeWorkspace, seedWorkspace, test } from "./fixtures";
+import {
+  expect,
+  fulfilJson,
+  makePlan,
+  makeWorkspace,
+  mockApi,
+  seedWorkspace,
+  test,
+} from "./fixtures";
 
 const TAGS = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"];
 const TABS = ["Budget", "Timeline", "Vendors", "Ideas"] as const;
@@ -60,6 +68,77 @@ test.describe("accessibility", () => {
     await page.goto("/plan/summary");
     await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
     await expectNoViolations(page);
+  });
+
+  test("404 page has no axe violations", async ({ page }) => {
+    const response = await page.goto("/no-such-page");
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+    await expectNoViolations(page);
+  });
+
+  test("refine success state has no axe violations", async ({ page }) => {
+    const refined = makePlan("Refined plan summary.");
+    refined.ideas[0]!.title = "Eco-friendly paper lanterns";
+    await seedWorkspace(page, makeWorkspace());
+    await mockApi(page, { refine: refined });
+    await page.goto("/plan");
+    await page.getByLabel("What should change?").fill("Make it eco-friendly");
+    await page.getByRole("button", { name: "Apply refinement" }).click();
+    await expect(page.getByRole("status").filter({ hasText: /Updated \d+ .*\./ })).toBeVisible();
+    await expectNoViolations(page);
+  });
+
+  test("refine error state has no axe violations", async ({ page }) => {
+    await seedWorkspace(page, makeWorkspace());
+    await page.route("**/api/refine", (route) =>
+      fulfilJson(
+        route,
+        { error: "Plan generation service is unavailable", correlationId: "x" },
+        502,
+      ),
+    );
+    await page.goto("/plan");
+    await page.getByLabel("What should change?").fill("Make it eco-friendly");
+    await page.getByRole("button", { name: "Apply refinement" }).click();
+    await expect(page.getByText("Plan generation service is unavailable")).toBeVisible();
+    await expectNoViolations(page);
+  });
+
+  test("refine validation error has no axe violations", async ({ page }) => {
+    await seedWorkspace(page, makeWorkspace({ plan: makePlan() }));
+    await page.goto("/plan");
+    await page.getByRole("button", { name: "Apply refinement" }).click();
+    await expect(page.getByText("Describe the change you want in a few words.")).toBeVisible();
+    await expectNoViolations(page);
+  });
+
+  test.describe("dark colour scheme", () => {
+    test.beforeEach(async ({ page }) => {
+      await page.emulateMedia({ colorScheme: "dark" });
+    });
+
+    test("intake page has no axe violations", async ({ page }) => {
+      await page.goto("/");
+      await expectNoViolations(page);
+    });
+
+    test("workspace tabs have no axe violations", async ({ page }) => {
+      await seedWorkspace(page, makeWorkspace());
+      await page.goto("/plan");
+      for (const tab of TABS) {
+        await page.getByRole("tab", { name: tab }).click();
+        await expect(page.getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "true");
+        await expectNoViolations(page);
+      }
+    });
+
+    test("summary page has no axe violations", async ({ page }) => {
+      await seedWorkspace(page, makeWorkspace());
+      await page.goto("/plan/summary");
+      await expect(page.getByRole("button", { name: "Export JSON" })).toBeVisible();
+      await expectNoViolations(page);
+    });
   });
 
   for (const path of ["/", "/plan", "/plan/summary"]) {
