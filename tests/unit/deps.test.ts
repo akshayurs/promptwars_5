@@ -23,6 +23,10 @@ describe("routeDependencies", () => {
     expect(routeDependencies.generator()).toBe(generator);
     expect(createGeminiClient).toHaveBeenCalledTimes(1);
     expect(createGeminiClient).toHaveBeenCalledWith("fake-test-value");
+    expect(createPlanGenerator).toHaveBeenCalledWith(
+      { models: {} },
+      { logger: routeDependencies.logger },
+    );
     expect(readEnv).toHaveBeenCalledTimes(1);
   });
 
@@ -30,5 +34,12 @@ describe("routeDependencies", () => {
     const { routeDependencies } = await import("@/lib/api/deps");
     expect(routeDependencies.limiter.consume("k").allowed).toBe(true);
     expect(typeof routeDependencies.logger.info).toBe("function");
+  });
+
+  it("gives CSP reports their own limiter so they never spend plan quota", async () => {
+    const { cspReportDependencies, routeDependencies } = await import("@/lib/api/deps");
+    expect(cspReportDependencies.limiter).not.toBe(routeDependencies.limiter);
+    expect(cspReportDependencies.logger).toBe(routeDependencies.logger);
+    expect(cspReportDependencies.limiter.consume("k").limit).toBe(20);
   });
 });

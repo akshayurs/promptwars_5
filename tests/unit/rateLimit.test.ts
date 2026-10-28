@@ -22,7 +22,7 @@ describe("createRateLimiter", () => {
   it("allows a burst up to capacity then denies with a retry hint", () => {
     const { limiter } = setup();
     for (let i = 0; i < 3; i += 1) {
-      expect(limiter.consume("a")).toEqual({ allowed: true, retryAfterSeconds: 0 });
+      expect(limiter.consume("a")).toMatchObject({ allowed: true, retryAfterSeconds: 0 });
     }
     const denied = limiter.consume("a");
     expect(denied.allowed).toBe(false);
@@ -101,6 +101,27 @@ describe("createRateLimiter", () => {
     expect(limiter.size()).toBe(2);
     expect(limiter.consume("a").allowed).toBe(false);
     expect(limiter.consume("b").allowed).toBe(true);
+  });
+
+  it("reports limit, remaining tokens, reset time and window for rate-limit headers", () => {
+    const { limiter } = setup(10, 0.2);
+    expect(limiter.consume("a")).toEqual({
+      allowed: true,
+      retryAfterSeconds: 0,
+      limit: 10,
+      remaining: 9,
+      resetSeconds: 5,
+      windowSeconds: 50,
+    });
+    for (let i = 0; i < 9; i += 1) limiter.consume("a");
+    expect(limiter.consume("a")).toEqual({
+      allowed: false,
+      retryAfterSeconds: 5,
+      limit: 10,
+      remaining: 0,
+      resetSeconds: 50,
+      windowSeconds: 50,
+    });
   });
 
   it("uses the real clock by default", () => {

@@ -1,17 +1,19 @@
 import "server-only";
 
-import { ApiError, FinishReason, GoogleGenAI, type GenerateContentResponse } from "@google/genai";
-import { API } from "@/lib/constants";
-import { toIsoDay } from "@/lib/dates";
-import { toGeminiResponseSchema } from "@/lib/geminiSchema";
-import { buildPlanPrompt, buildRefinePrompt, type Prompt } from "@/lib/prompts";
 import {
-  GeneratedPlanSchema,
-  LenientGeneratedPlanSchema,
-  type GeneratedPlan,
-  type Intake,
-  type RefineRequest,
-} from "@/lib/schema";
+  ApiError,
+  FinishReason,
+  GoogleGenAI,
+  type GenerateContentResponse,
+  type GenerateContentResponseUsageMetadata,
+} from "@google/genai";
+import { API } from "@/lib/constants";
+import { systemClock, toIsoDay, type Clock } from "@/lib/dates";
+import { toGeminiResponseSchema } from "@/lib/geminiSchema";
+import { logger as defaultLogger, type Logger } from "@/lib/logger";
+import { buildPlanPrompt, buildRefinePrompt, type Prompt } from "@/lib/prompts";
+import { GeneratedPlanSchema, LenientGeneratedPlanSchema } from "@/lib/generatedPlanSchema";
+import type { GeneratedPlan, Intake, RefineRequest } from "@/lib/schema";
 
 export type PlanGenerationFailure = "timeout" | "malformed" | "upstream" | "busy";
 
@@ -28,14 +30,19 @@ export class PlanGenerationError extends Error {
 
 export type ModelClient = Pick<GoogleGenAI, "models">;
 
+export type GenerationContext = { signal: AbortSignal; correlationId: string };
+
 export type PlanGenerator = {
-  generate(intake: Intake, signal: AbortSignal): Promise<GeneratedPlan>;
-  refine(request: RefineRequest, signal: AbortSignal): Promise<GeneratedPlan>;
+  generate(intake: Intake, context: GenerationContext): Promise<GeneratedPlan>;
+  refine(request: RefineRequest, context: GenerationContext): Promise<GeneratedPlan>;
 };
 
+export type PlanGeneratorOptions = { clock?: Clock; logger?: Logger };
+
+type Operation = keyof typeof API.geminiTemperature;
+
 const RESPONSE_JSON_SCHEMA = toGeminiResponseSchema(GeneratedPlanSchema);
-const BUSY_STATUSES: ReadonlySet<number> = new Set([429, 503]);
-const RETRIES_ON_MALFORMED = 1;
+const BUSY_STATUSES: ReadonlySet<number> = new Set<number>(API.geminiBusyStatuses);
 
 const parseGenerated = (response: GenerateContentResponse): GeneratedPlan => {
   const finishReason = response.candidates?.[0]?.finishReason;
@@ -60,7 +67,9 @@ const parseGenerated = (response: GenerateContentResponse): GeneratedPlan => {
 };
 
 const toGenerationError = (error: unknown): PlanGenerationError => {
-  if (error instanceof PlanGenerationError) return error;
+  if (error instanceof PlanGenerationError) {
+    return error;
+  }
   if (error instanceof Error && error.name === "AbortError") {
     return new PlanGenerationError("timeout", "Plan generation timed out");
   }
@@ -81,11 +90,26 @@ const toGenerationError = (error: unknown): PlanGenerationError => {
   );
 };
 
+const usageFields = (
+  usage: GenerateContentResponseUsageMetadata | undefined,
+): Record<string, number> => ({
+  promptTokens: usage?.promptTokenCount ?? 0,
+  candidateTokens: usage?.candidatesTokenCount ?? 0,
+  thoughtTokens: usage?.thoughtsTokenCount ?? 0,
+  totalTokens: usage?.totalTokenCount ?? 0,
+});
+
+/** Plan generator over the Gemini client: structured output, one retry on malformed replies. */
 export const createPlanGenerator = (
   client: ModelClient,
-  clock: () => Date = () => new Date(),
+  { clock = systemClock, logger = defaultLogger }: PlanGeneratorOptions = {},
 ): PlanGenerator => {
-  const callModel = async (prompt: Prompt, signal: AbortSignal): Promise<GeneratedPlan> => {
+  const callModel = async (
+    operation: Operation,
+    prompt: Prompt,
+    { context, attempt }: { context: GenerationContext; attempt: number },
+  ): Promise<GeneratedPlan> => {
+    const startedAt = clock().getTime();
     const response = await client.models.generateContent({
       model: API.geminiModel,
       contents: prompt.user,
@@ -93,33 +117,51 @@ export const createPlanGenerator = (
         systemInstruction: prompt.system,
         responseMimeType: "application/json",
         responseJsonSchema: RESPONSE_JSON_SCHEMA,
+        temperature: API.geminiTemperature[operation],
         maxOutputTokens: API.geminiMaxOutputTokens,
         thinkingConfig: { thinkingBudget: API.geminiThinkingBudget },
-        abortSignal: signal,
+        abortSignal: context.signal,
       },
+    });
+    logger.info("model call", {
+      correlationId: context.correlationId,
+      operation,
+      attempt,
+      durationMs: clock().getTime() - startedAt,
+      ...usageFields(response.usageMetadata),
     });
     return parseGenerated(response);
   };
 
-  const callWithRetry = async (prompt: Prompt, signal: AbortSignal): Promise<GeneratedPlan> => {
-    let attemptsLeft = RETRIES_ON_MALFORMED + 1;
-    for (;;) {
-      attemptsLeft -= 1;
+  const callWithRetry = async (
+    operation: Operation,
+    prompt: Prompt,
+    context: GenerationContext,
+  ): Promise<GeneratedPlan> => {
+    for (let attempt = 1; ; attempt += 1) {
       try {
-        return await callModel(prompt, signal);
+        return await callModel(operation, prompt, { context, attempt });
       } catch (error) {
         const failure = toGenerationError(error);
-        if (failure.code !== "malformed" || attemptsLeft === 0) throw failure;
+        const retryable =
+          failure.code === "malformed" &&
+          attempt <= API.geminiMalformedRetries &&
+          !context.signal.aborted;
+        if (!retryable) {
+          throw failure;
+        }
       }
     }
   };
 
   return {
-    generate: (intake, signal) => callWithRetry(buildPlanPrompt(intake, toIsoDay(clock())), signal),
-    refine: (request, signal) =>
-      callWithRetry(buildRefinePrompt(request, toIsoDay(clock())), signal),
+    generate: (intake, context) =>
+      callWithRetry("generate", buildPlanPrompt(intake, toIsoDay(clock())), context),
+    refine: (request, context) =>
+      callWithRetry("refine", buildRefinePrompt(request, toIsoDay(clock())), context),
   };
 };
 
+/** Gemini SDK client with the request timeout applied to every call. */
 export const createGeminiClient = (apiKey: string): ModelClient =>
   new GoogleGenAI({ apiKey, httpOptions: { timeout: API.requestTimeoutMs } });

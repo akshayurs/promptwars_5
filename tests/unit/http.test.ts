@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clientKey, errorResponse, jsonResponse, readJsonBody } from "@/lib/http";
+import { clientKey, isCrossSiteRequest, readJsonBody } from "@/lib/http";
 
 const post = (body: string, headers: Record<string, string> = {}): Request =>
   new Request("http://localhost/api", {
@@ -13,6 +13,26 @@ describe("readJsonBody", () => {
   it("returns 415 for a wrong content type", async () => {
     const request = post("{}", { "content-type": "text/plain" });
     expect(await readJsonBody(request, 100)).toMatchObject({ ok: false, status: 415 });
+  });
+
+  it("rejects a media type that only starts with application/json", async () => {
+    const request = post("{}", { "content-type": "application/jsonp" });
+    expect(await readJsonBody(request, 100)).toEqual({
+      ok: false,
+      status: 415,
+      reason: "unsupported_media_type",
+      message: "Content-Type must be application/json",
+    });
+  });
+
+  it("accepts any of the given media types and names them all when rejecting", async () => {
+    const types = ["application/reports+json", "application/csp-report"];
+    const report = post("[]", { "content-type": "application/csp-report" });
+    expect(await readJsonBody(report, 100, types)).toEqual({ ok: true, value: [] });
+    expect(await readJsonBody(post("[]"), 100, types)).toMatchObject({
+      status: 415,
+      message: "Content-Type must be application/reports+json or application/csp-report",
+    });
   });
 
   it("returns 415 for a missing content type", async () => {
@@ -96,6 +116,7 @@ describe("readJsonBody", () => {
     expect(await readJsonBody(request, 100)).toEqual({
       ok: false,
       status: 400,
+      reason: "invalid_utf8",
       message: "Request body is not valid UTF-8",
     });
   });
@@ -109,7 +130,16 @@ describe("readJsonBody", () => {
   });
 
   it("returns 400 for malformed JSON", async () => {
-    expect(await readJsonBody(post("{nope"), 100)).toMatchObject({ ok: false, status: 400 });
+    expect(await readJsonBody(post("{nope"), 100)).toMatchObject({
+      ok: false,
+      status: 400,
+      reason: "invalid_json",
+    });
+  });
+
+  it("tags an oversize body with the body_too_large reason", async () => {
+    const request = post("{}", { "content-length": "101" });
+    expect(await readJsonBody(request, 100)).toMatchObject({ reason: "body_too_large" });
   });
 
   it("returns the parsed value on success", async () => {
@@ -148,22 +178,15 @@ describe("clientKey", () => {
   });
 });
 
-describe("responses", () => {
-  it("jsonResponse sets no-store, request id, status and extra headers", async () => {
-    const res = jsonResponse(
-      { a: 1 },
-      { status: 201, correlationId: "cid", headers: { "X-A": "b" } },
-    );
-    expect(res.status).toBe(201);
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
-    expect(res.headers.get("X-Request-Id")).toBe("cid");
-    expect(res.headers.get("X-A")).toBe("b");
-    expect(await res.json()).toEqual({ a: 1 });
+describe("isCrossSiteRequest", () => {
+  const withHeaders = (headers: Record<string, string>) =>
+    new Request("http://localhost/api", { headers });
+
+  it.each(["same-origin", "none"])("allows Sec-Fetch-Site %s", (site) => {
+    expect(isCrossSiteRequest(withHeaders({ "sec-fetch-site": site }))).toBe(false);
   });
 
-  it("errorResponse includes the correlationId in the body", async () => {
-    const res = errorResponse({ error: "bad" }, { status: 400, correlationId: "cid" });
-    expect(await res.json()).toEqual({ error: "bad", correlationId: "cid" });
-    expect(res.headers.get("X-Request-Id")).toBe("cid");
+  it.each(["same-site", "cross-site"])("rejects Sec-Fetch-Site %s", (site) => {
+    expect(isCrossSiteRequest(withHeaders({ "sec-fetch-site": site }))).toBe(true);
   });
 });

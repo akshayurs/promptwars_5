@@ -10,6 +10,7 @@ const defaultSink: Sink = (line) => {
 
 export type Logger = Record<Level, (message: string, fields?: Fields) => void>;
 
+/** Structured JSON-lines logger; fields must never carry request bodies, plans or prompts. */
 export const createLogger = (
   sink: Sink = defaultSink,
   now: () => Date = () => new Date(),
@@ -30,4 +31,5 @@ export const createLogger = (
   };
 };
 
+/** Process-wide logger writing to stderr. */
 export const logger: Logger = createLogger();

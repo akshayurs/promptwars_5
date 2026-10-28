@@ -6,17 +6,32 @@ import { createGeminiClient, createPlanGenerator, type PlanGenerator } from "@/l
 import { logger } from "@/lib/logger";
 import { createRateLimiter } from "@/lib/rateLimit";
 
+import type { CspReportDependencies } from "./cspReport";
 import type { RouteDependencies } from "./planRoute";
 
-let generator: PlanGenerator | undefined;
-
-const getGenerator = (): PlanGenerator => {
-  generator ??= createPlanGenerator(createGeminiClient(readEnv().GEMINI_API_KEY));
-  return generator;
+/** Wraps a factory so it runs on first use and every later call returns the same value. */
+const memoise = <T>(factory: () => T): (() => T) => {
+  const cache: { value?: T } = {};
+  return () => {
+    if (!("value" in cache)) {
+      cache.value = factory();
+    }
+    return cache.value;
+  };
 };
 
+// Built lazily so a missing key fails the first request, not the module import during build.
+const planGenerator = memoise((): PlanGenerator =>
+  createPlanGenerator(createGeminiClient(readEnv().GEMINI_API_KEY), { logger }),
+);
+
 export const routeDependencies: RouteDependencies = {
-  generator: getGenerator,
+  generator: planGenerator,
   limiter: createRateLimiter(API.rateLimit),
+  logger,
+};
+
+export const cspReportDependencies: CspReportDependencies = {
+  limiter: createRateLimiter(API.cspReportRateLimit),
   logger,
 };

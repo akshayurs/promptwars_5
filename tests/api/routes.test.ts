@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlanGenerator } from "@/lib/gemini";
 import { createLogger } from "@/lib/logger";
 import { createRateLimiter } from "@/lib/rateLimit";
-import { PlanSchema } from "@/lib/schema";
+import { LIMITS } from "@/lib/constants";
+import { PlanSchema, type RefineRequest } from "@/lib/schema";
 
 import { makeGeneratedPlan, makeIntake, makePlan } from "../unit/fixtures";
 
@@ -16,10 +17,17 @@ vi.mock("@/lib/api/deps", () => ({
     limiter: createRateLimiter({ capacity: 100, refillPerSecond: 1 }),
     logger: createLogger(() => undefined),
   },
+  cspReportDependencies: {
+    limiter: createRateLimiter({ capacity: 100, refillPerSecond: 1 }),
+    logger: createLogger(() => undefined),
+  },
 }));
 
-const { POST: planPost } = await import("@/app/api/plan/route");
-const { POST: refinePost } = await import("@/app/api/refine/route");
+const planRoute = await import("@/app/api/plan/route");
+const refineRoute = await import("@/app/api/refine/route");
+const cspReportRoute = await import("@/app/api/csp-report/route");
+const { POST: planPost } = planRoute;
+const { POST: refinePost } = refineRoute;
 
 const request = (url: string, body: unknown): Request =>
   new Request(url, {
@@ -107,5 +115,98 @@ describe("app/api/refine route", () => {
       request("http://localhost/api/refine", { intake: makeIntake(), plan: makePlan() }),
     );
     expect(res.status).toBe(400);
+  });
+});
+
+describe.each([
+  ["/api/plan", planRoute],
+  ["/api/refine", refineRoute],
+  ["/api/csp-report", cspReportRoute],
+])("%s other methods", (_path, route) => {
+  it.each(["GET", "PUT", "PATCH", "DELETE"] as const)(
+    "answers %s with 405 and Allow: POST",
+    (method) => {
+      const res = route[method]();
+      expect(res.status).toBe(405);
+      expect(res.headers.get("Allow")).toBe("POST");
+    },
+  );
+});
+
+// Every text field at its schema maximum, in a character that takes three UTF-8 bytes.
+const maxSizeRefineRequest = (): RefineRequest => {
+  const text = (length: number): string => "क".repeat(length);
+  const plan = makePlan();
+  const id = plan.budget[0]!.id;
+  const times = <T>(count: number, item: () => T): T[] => Array.from({ length: count }, item);
+  return {
+    intake: {
+      ...makeIntake({
+        eventName: text(LIMITS.shortText),
+        location: text(LIMITS.mediumText),
+        vibe: text(LIMITS.longText),
+        mustHaves: text(LIMITS.longText),
+        guestCount: LIMITS.maxGuests,
+        totalBudget: LIMITS.maxBudget,
+      }),
+      eventType: "wedding",
+      details: { coupleNames: text(LIMITS.shortText), ceremonyStyle: text(LIMITS.shortText) },
+    },
+    plan: {
+      summary: text(LIMITS.summaryText),
+      budget: times(LIMITS.budgetLines.max, () => ({
+        id,
+        category: text(LIMITS.shortText),
+        amount: LIMITS.maxBudget / LIMITS.budgetLines.max,
+        rationale: text(LIMITS.mediumText),
+      })),
+      timeline: times(LIMITS.milestones.max, () => ({
+        id,
+        title: text(LIMITS.shortText),
+        phase: "final-prep" as const,
+        daysBeforeEvent: LIMITS.maxDaysBeforeEvent,
+        details: text(LIMITS.mediumText),
+        done: false,
+      })),
+      vendors: times(LIMITS.vendors.max, () => ({
+        id,
+        category: text(LIMITS.shortText),
+        whyNeeded: text(LIMITS.mediumText),
+        questionsToAsk: times(LIMITS.questionsPerVendor, () => text(LIMITS.mediumText)),
+        booked: false,
+      })),
+      ideas: times(LIMITS.ideas.max, () => ({
+        id,
+        title: text(LIMITS.shortText),
+        description: text(LIMITS.longText),
+        inspiredBy: text(LIMITS.mediumText),
+      })),
+    },
+    instruction: text(LIMITS.longText),
+  };
+};
+
+describe("request body limit", () => {
+  it("accepts the largest schema-valid refine request instead of answering 413", async () => {
+    refine.mockResolvedValue(makeGeneratedPlan());
+    const body = maxSizeRefineRequest();
+    const bytes = new TextEncoder().encode(JSON.stringify(body)).byteLength;
+    expect(bytes).toBeGreaterThan(LIMITS.requestBodyBytes / 2);
+    expect(bytes).toBeLessThanOrEqual(LIMITS.requestBodyBytes);
+    const res = await refinePost(request("http://localhost/api/refine", body));
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("app/api/csp-report route", () => {
+  it("accepts a report and answers 204", async () => {
+    const res = await cspReportRoute.POST(
+      new Request("http://localhost/api/csp-report", {
+        method: "POST",
+        body: JSON.stringify({ "csp-report": { "violated-directive": "script-src" } }),
+        headers: { "content-type": "application/csp-report" },
+      }),
+    );
+    expect(res.status).toBe(204);
   });
 });

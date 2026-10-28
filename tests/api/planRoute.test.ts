@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createPlanRoute, type RouteDependencies } from "@/lib/api/planRoute";
-import { LIMITS } from "@/lib/constants";
+import { API, LIMITS } from "@/lib/constants";
 import { PlanGenerationError, type PlanGenerator } from "@/lib/gemini";
 import { createLogger } from "@/lib/logger";
 import { toPlan } from "@/lib/plan";
@@ -68,10 +68,56 @@ describe("createPlanRoute", () => {
     expect(PlanSchema.safeParse(await res.json()).success).toBe(true);
   });
 
-  it("passes a live abort signal to the generator", async () => {
+  it("passes a live abort signal and the correlation id to the generator", async () => {
     generate.mockResolvedValue(makeGeneratedPlan());
-    await call(build(), valid());
-    expect(generate.mock.calls[0]?.[1].aborted).toBe(false);
+    const res = await call(build(), valid());
+    const context = generate.mock.calls[0]?.[1];
+    expect(context?.signal.aborted).toBe(false);
+    expect(context?.correlationId).toBe(res.headers.get("X-Request-Id"));
+  });
+
+  it("locks API responses down with a deny-all CSP and nosniff", async () => {
+    generate.mockResolvedValue(makeGeneratedPlan());
+    for (const res of [await call(build(), valid()), await call(build(), "{bad")]) {
+      expect(res.headers.get("Content-Security-Policy")).toBe(
+        "default-src 'none'; frame-ancestors 'none'",
+      );
+      expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    }
+  });
+
+  it("sends IETF rate-limit headers on success", async () => {
+    generate.mockResolvedValue(makeGeneratedPlan());
+    const res = await call(build(10), valid());
+    expect(res.headers.get("RateLimit-Policy")).toBe('"default";q=10;w=10000');
+    expect(res.headers.get("RateLimit")).toBe('"default";r=9;t=1000');
+  });
+
+  it.each([
+    ["415", { "content-type": "text/plain" }, "{}", 415, "unsupported_media_type"],
+    [
+      "413",
+      {},
+      JSON.stringify({ pad: "x".repeat(LIMITS.requestBodyBytes) }),
+      413,
+      "body_too_large",
+    ],
+    ["400 bad JSON", {}, "{bad", 400, "invalid_json"],
+    ["400 validation", {}, JSON.stringify({ nope: true }), 400, "validation_failed"],
+    ["403", { "sec-fetch-site": "cross-site" }, "{}", 403, "cross_site"],
+  ])("logs a rejected request (%s) at warn with status and reason only", async (...args) => {
+    const [, headers, body, status, reason] = args;
+    const res = await call(build(), body, headers);
+    expect(res.status).toBe(status);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0] ?? "{}")).toEqual({
+      time: new Date(0).toISOString(),
+      level: "warn",
+      message: "request rejected",
+      correlationId: res.headers.get("X-Request-Id"),
+      status,
+      reason,
+    });
   });
 
   it("returns 400 with an issues array for an invalid field", async () => {
@@ -140,6 +186,12 @@ describe("createPlanRoute", () => {
     const res = await call(route, valid(), { "x-forwarded-for": "client-a" });
     expect(res.status).toBe(429);
     expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
+    expect(res.headers.get("RateLimit")).toBe('"default";r=0;t=2000');
+    expect(JSON.parse(lines.at(-1) ?? "{}")).toMatchObject({
+      level: "warn",
+      status: 429,
+      reason: "rate_limited",
+    });
     const other = await call(route, valid(), { "x-forwarded-for": "client-b" });
     expect(other.status).toBe(200);
   });
@@ -170,7 +222,7 @@ describe("createPlanRoute", () => {
     expect(lines[0]).not.toContain("upstreamStatus");
   });
 
-  it("returns 499 without logging when the client disconnects", async () => {
+  it("returns 499 with the standard headers and an info log when the client disconnects", async () => {
     const controller = new AbortController();
     generate.mockImplementation(() => {
       controller.abort();
@@ -186,7 +238,12 @@ describe("createPlanRoute", () => {
     );
     expect(res.status).toBe(499);
     expect(await res.text()).toBe("");
-    expect(lines).toHaveLength(0);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const correlationId = res.headers.get("X-Request-Id");
+    expect(correlationId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(lines.map((line) => JSON.parse(line) as unknown)).toEqual([
+      expect.objectContaining({ level: "info", message: "client closed request", correlationId }),
+    ]);
   });
 
   it("returns 503 with Retry-After when the model is busy", async () => {
@@ -199,7 +256,7 @@ describe("createPlanRoute", () => {
     );
     const res = await call(build(), valid());
     expect(res.status).toBe(503);
-    expect(res.headers.get("Retry-After")).toBe("5");
+    expect(res.headers.get("Retry-After")).toBe(String(API.busyRetryAfterSeconds));
     expect(await res.json()).toMatchObject({
       error: "The planning model is busy. Please try again in a moment.",
     });
@@ -253,7 +310,7 @@ describe("createPlanRoute", () => {
 
   it("aborts the signal when the timeout elapses", async () => {
     const aborted = new Promise<boolean>((resolve) => {
-      generate.mockImplementation((_intake, signal) => {
+      generate.mockImplementation((_intake, { signal }) => {
         signal.addEventListener("abort", () => {
           resolve(true);
         });

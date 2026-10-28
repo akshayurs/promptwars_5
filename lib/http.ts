@@ -1,12 +1,37 @@
-export type BodyResult =
-  { ok: true; value: unknown } | { ok: false; status: 400 | 413 | 415; message: string };
+export type RejectionReason =
+  | "cross_site"
+  | "rate_limited"
+  | "unsupported_media_type"
+  | "body_too_large"
+  | "invalid_utf8"
+  | "invalid_json"
+  | "validation_failed";
 
-const TOO_LARGE: BodyResult = { ok: false, status: 413, message: "Request body is too large" };
+type BodyFailure = {
+  ok: false;
+  status: 400 | 413 | 415;
+  reason: RejectionReason;
+  message: string;
+};
+
+export type BodyResult = { ok: true; value: unknown } | BodyFailure;
+
+const JSON_MEDIA_TYPES: readonly string[] = ["application/json"];
+
+const TOO_LARGE: BodyFailure = {
+  ok: false,
+  status: 413,
+  reason: "body_too_large",
+  message: "Request body is too large",
+};
 
 const declaredLength = (request: Request): number => {
   const length = Number(request.headers.get("content-length") ?? Number.NaN);
   return Number.isFinite(length) ? length : 0;
 };
+
+const mediaType = (request: Request): string =>
+  (request.headers.get("content-type") ?? "").split(";", 1).join("").trim().toLowerCase();
 
 const concat = (chunks: readonly Uint8Array[], total: number): Uint8Array => {
   const bytes = new Uint8Array(total);
@@ -22,13 +47,17 @@ const readCapped = async (
   body: ReadableStream<Uint8Array> | null,
   maxBytes: number,
 ): Promise<Uint8Array | null> => {
-  if (body === null) return new Uint8Array();
+  if (body === null) {
+    return new Uint8Array();
+  }
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
     const { done, value } = await reader.read();
-    if (done) return concat(chunks, total);
+    if (done) {
+      return concat(chunks, total);
+    }
     total += value.byteLength;
     if (total > maxBytes) {
       await reader.cancel();
@@ -43,21 +72,42 @@ const decodeJson = (bytes: Uint8Array): BodyResult => {
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
-    return { ok: false, status: 400, message: "Request body is not valid UTF-8" };
+    return {
+      ok: false,
+      status: 400,
+      reason: "invalid_utf8",
+      message: "Request body is not valid UTF-8",
+    };
   }
   try {
     return { ok: true, value: JSON.parse(text) };
   } catch {
-    return { ok: false, status: 400, message: "Request body is not valid JSON" };
+    return {
+      ok: false,
+      status: 400,
+      reason: "invalid_json",
+      message: "Request body is not valid JSON",
+    };
   }
 };
 
-export const readJsonBody = async (request: Request, maxBytes: number): Promise<BodyResult> => {
-  const contentType = request.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) {
-    return { ok: false, status: 415, message: "Content-Type must be application/json" };
+/** Reads a JSON body of an accepted media type, streaming no more than `maxBytes`. */
+export const readJsonBody = async (
+  request: Request,
+  maxBytes: number,
+  mediaTypes: readonly string[] = JSON_MEDIA_TYPES,
+): Promise<BodyResult> => {
+  if (!mediaTypes.includes(mediaType(request))) {
+    return {
+      ok: false,
+      status: 415,
+      reason: "unsupported_media_type",
+      message: `Content-Type must be ${mediaTypes.join(" or ")}`,
+    };
   }
-  if (declaredLength(request) > maxBytes) return TOO_LARGE;
+  if (declaredLength(request) > maxBytes) {
+    return TOO_LARGE;
+  }
   const bytes = await readCapped(request.body, maxBytes);
   return bytes === null ? TOO_LARGE : decodeJson(bytes);
 };
@@ -75,6 +125,7 @@ const lastForwardedHop = (header: string | null): string | undefined =>
     .filter((hop) => hop.length > 0)
     .at(-1);
 
+/** Rate-limit key for the caller: the proxy-appended forwarded hop, then x-real-ip. */
 export const clientKey = (request: Request): string =>
   lastForwardedHop(request.headers.get("x-forwarded-for")) ??
   nonEmpty(request.headers.get("x-real-ip")) ??
@@ -89,35 +140,13 @@ const ALLOWED_FETCH_SITES: ReadonlySet<string> = new Set(["same-origin", "none"]
  */
 export const isCrossSiteRequest = (request: Request): boolean => {
   const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite !== null) return !ALLOWED_FETCH_SITES.has(fetchSite);
+  if (fetchSite !== null) {
+    return !ALLOWED_FETCH_SITES.has(fetchSite);
+  }
   const origin = request.headers.get("origin");
-  if (origin === null) return false;
+  if (origin === null) {
+    return false;
+  }
   const host = request.headers.get("host") ?? new URL(request.url).host;
   return URL.parse(origin)?.host !== host;
 };
-
-export type ApiErrorBody = {
-  error: string;
-  correlationId: string;
-  issues?: ReadonlyArray<{ path: string; message: string }>;
-};
-
-export type ResponseOptions = {
-  status: number;
-  correlationId: string;
-  headers?: Record<string, string>;
-};
-
-export const jsonResponse = (
-  body: unknown,
-  { status, correlationId, headers = {} }: ResponseOptions,
-): Response =>
-  Response.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store", "X-Request-Id": correlationId, ...headers },
-  });
-
-export const errorResponse = (
-  body: Omit<ApiErrorBody, "correlationId">,
-  options: ResponseOptions,
-): Response => jsonResponse({ ...body, correlationId: options.correlationId }, options);

@@ -8,6 +8,7 @@ const EnvSchema = z.object({
 
 export type Env = z.infer<typeof EnvSchema>;
 
+/** Validates the server environment, failing fast without echoing any value. */
 export const readEnv = (source: Record<string, string | undefined> = process.env): Env => {
   const parsed = EnvSchema.safeParse(source);
   if (!parsed.success) {
