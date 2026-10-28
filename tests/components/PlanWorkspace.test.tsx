@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event";
 
 import { PlanWorkspace } from "@/components/PlanWorkspace";
 import { requestRefinement } from "@/lib/client";
-import { formatMoney, todayIso } from "@/lib/format";
+import { todayIso } from "@/lib/dates";
+import { formatMoney } from "@/lib/format";
 import { workspaceStore } from "@/lib/workspaceStore";
 
 import { makeIntake, makeWorkspace, readStoredWorkspace } from "./fixtures";

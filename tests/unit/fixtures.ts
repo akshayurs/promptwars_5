@@ -1,3 +1,4 @@
+import { WORKSPACE_VERSION } from "@/lib/constants";
 import type {
   EventDetails,
   EventType,
@@ -90,7 +91,7 @@ export const makePlan = (overrides: Partial<Plan> = {}): Plan => {
 };
 
 export const makeWorkspace = (overrides: Partial<StoredWorkspace> = {}): StoredWorkspace => ({
-  version: 2,
+  version: WORKSPACE_VERSION,
   intake: makeIntake(),
   plan: makePlan(),
   previousPlan: null,

@@ -2,7 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Timeline } from "@/components/Timeline";
-import { formatDate, shiftDate, todayIso } from "@/lib/format";
+import { shiftDate, todayIso } from "@/lib/dates";
+import { formatDate } from "@/lib/format";
 import type { Milestone } from "@/lib/schema";
 
 import { makePlan } from "./fixtures";

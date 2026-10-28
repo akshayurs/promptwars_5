@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { LIMITS } from "@/lib/constants";
+import { LIMITS, WORKSPACE_VERSION } from "@/lib/constants";
 import type { BudgetLine } from "@/lib/schema";
 import { createWorkspace, createWorkspaceReducer, workspaceReducer } from "@/lib/workspace";
 
@@ -10,11 +10,11 @@ const STAMP = "2031-02-03T04:05:06.000Z";
 const reducer = createWorkspaceReducer(() => STAMP);
 
 describe("createWorkspace", () => {
-  it("builds a version 2 workspace with no previous plan", () => {
+  it("builds a current-version workspace with no previous plan", () => {
     const intake = makeIntake();
     const plan = makePlan();
     expect(createWorkspace(intake, plan, () => STAMP)).toEqual({
-      version: 2,
+      version: WORKSPACE_VERSION,
       intake,
       plan,
       previousPlan: null,
@@ -52,6 +52,17 @@ describe("workspace reducer", () => {
     expect(next?.savedAt).toBe(STAMP);
     expect(next?.previousPlan).toBe(ws.previousPlan);
     expect(ws).toEqual(snapshot);
+  });
+
+  it("setAmount to the current amount returns the same state reference", () => {
+    const ws = makeWorkspace();
+    const line = ws.plan.budget[0]!;
+    expect(reducer(ws, { type: "setAmount", id: line.id, amount: line.amount })).toBe(ws);
+  });
+
+  it("setAmount for an unknown line returns the same state reference", () => {
+    const ws = makeWorkspace();
+    expect(reducer(ws, { type: "setAmount", id: "missing", amount: 1 })).toBe(ws);
   });
 
   it("toggleVendor flips booked", () => {
@@ -164,6 +175,11 @@ describe("workspace reducer: setTotalBudget", () => {
   it("accepts the maximum budget exactly", () => {
     const next = reducer(makeWorkspace(), { type: "setTotalBudget", amount: LIMITS.maxBudget });
     expect(next?.intake.totalBudget).toBe(LIMITS.maxBudget);
+  });
+
+  it("setting the current total returns the same state reference", () => {
+    const ws = makeWorkspace();
+    expect(reducer(ws, { type: "setTotalBudget", amount: ws.intake.totalBudget })).toBe(ws);
   });
 
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, LIMITS.maxBudget + 1])(

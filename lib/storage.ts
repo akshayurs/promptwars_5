@@ -10,15 +10,18 @@ const attempt = <T>(action: () => T, fallback: T): T => {
   }
 };
 
+/** localStorage, or null on the server or when the browser blocks site data. */
 export const browserStorage = (): Storage | null =>
   typeof window === "undefined" ? null : attempt(() => window.localStorage, null);
 
+/** Removes the saved workspace; storage failures are ignored. */
 export const clearWorkspace = (storage: Storage | null = browserStorage()): void => {
   attempt(() => {
     storage?.removeItem(STORAGE_KEY);
   }, undefined);
 };
 
+/** The saved workspace if it is present and valid; invalid or outdated data is cleared. */
 export const loadWorkspace = (
   storage: Storage | null = browserStorage(),
 ): StoredWorkspace | null => {
@@ -31,6 +34,7 @@ export const loadWorkspace = (
   return null;
 };
 
+/** Saves the workspace; returns false when storage is unavailable or full. */
 export const saveWorkspace = (
   workspace: StoredWorkspace,
   storage: Storage | null = browserStorage(),

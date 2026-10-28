@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 
-import type { FieldIssues } from "@/lib/client";
+import type { FieldIssues } from "@/lib/types";
 import type { EventType } from "@/lib/schema";
 
 import { BirthdayFields, CommunityFields, WeddingFields } from "./DetailsFields";

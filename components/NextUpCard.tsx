@@ -10,7 +10,7 @@ import {
 import { IconBadge } from "@/components/ui/IconBadge";
 import { ArrowRightIcon, CheckIcon } from "@/components/ui/Icons";
 import { CARD } from "@/components/ui/styles";
-import { nextMilestone } from "@/lib/budget";
+import { nextMilestone } from "@/lib/milestones";
 import { formatDate } from "@/lib/format";
 import type { Milestone } from "@/lib/schema";
 

@@ -60,6 +60,23 @@ describe("createWorkspaceStore", () => {
     expect(storage.data.size).toBe(0);
   });
 
+  it("skips persisting and notifying when an edit changes nothing", () => {
+    const storage = makeMemoryStorage();
+    const ws = makeWorkspace();
+    storage.setItem(STORAGE_KEY, JSON.stringify(ws));
+    const store = createWorkspaceStore(() => storage, reducer);
+    const before = store.getSnapshot();
+    const setItem = vi.spyOn(storage, "setItem");
+    const listener = vi.fn();
+    store.subscribe(listener);
+    const line = ws.plan.budget[0]!;
+    store.dispatch({ type: "setAmount", id: line.id, amount: line.amount });
+    store.dispatch({ type: "setTotalBudget", amount: ws.intake.totalBudget });
+    expect(store.getSnapshot()).toBe(before);
+    expect(setItem).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it("stops notifying after unsubscribe", () => {
     const store = createWorkspaceStore(() => makeMemoryStorage(), reducer);
     const listener = vi.fn();

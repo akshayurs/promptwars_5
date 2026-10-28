@@ -2,7 +2,8 @@ import { useId, type ReactElement } from "react";
 
 import { CalendarIcon, MapPinIcon, UsersIcon, WalletIcon } from "@/components/ui/Icons";
 import { CARD, EYEBROW, badgeClass } from "@/components/ui/styles";
-import { daysUntil, formatDate, formatMoney } from "@/lib/format";
+import { daysUntil } from "@/lib/dates";
+import { formatDate, formatMoney } from "@/lib/format";
 import type { EventType, Intake, StoredWorkspace } from "@/lib/schema";
 
 const EVENT_LABELS: Record<EventType, string> = {

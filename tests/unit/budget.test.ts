@@ -2,13 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   budgetStatus,
-  groupMilestonesByPhase,
+  isValidTotal,
   sanitizeAmount,
   sumAllocated,
-  toggleVendor,
   updateLineAmount,
-  vendorProgress,
 } from "@/lib/budget";
+import { LIMITS } from "@/lib/constants";
 
 import { makePlan } from "./fixtures";
 
@@ -22,6 +21,10 @@ describe("sumAllocated", () => {
 
   it("returns 0 for no lines", () => {
     expect(sumAllocated([])).toBe(0);
+  });
+
+  it("accepts lines without ids (model output)", () => {
+    expect(sumAllocated([{ amount: 1.005 }, { amount: 2 }]).toString()).toBe("3.01");
   });
 });
 
@@ -82,58 +85,27 @@ describe("updateLineAmount", () => {
     expect(next).not.toBe(budget);
   });
 
-  it("leaves lines unchanged for an unknown id", () => {
+  it("returns the same array for an unknown id", () => {
     const { budget } = makePlan();
-    expect(updateLineAmount(budget, "missing", 1)).toEqual(budget);
+    expect(updateLineAmount(budget, "missing", 1)).toBe(budget);
+  });
+
+  it("returns the same array when the amount is unchanged", () => {
+    const { budget } = makePlan();
+    const target = budget[0]!;
+    expect(updateLineAmount(budget, target.id, target.amount)).toBe(budget);
   });
 });
 
-describe("toggleVendor", () => {
-  it("flips booked for the matching vendor only, without mutation", () => {
-    const { vendors } = makePlan();
-    const target = vendors[0]!;
-    const next = toggleVendor(vendors, target.id);
-    expect(next[0]?.booked).toBe(true);
-    expect(next[1]).toBe(vendors[1]);
-    expect(target.booked).toBe(false);
-    expect(toggleVendor(next, target.id)[0]?.booked).toBe(false);
-  });
-});
-
-describe("vendorProgress", () => {
-  it("returns zeros for an empty list", () => {
-    expect(vendorProgress([])).toEqual({ booked: 0, total: 0, ratio: 0 });
+describe("isValidTotal", () => {
+  it.each([0.01, 1, LIMITS.maxBudget])("accepts %s", (amount) => {
+    expect(isValidTotal(amount)).toBe(true);
   });
 
-  it("counts booked vendors", () => {
-    const { vendors } = makePlan();
-    const progress = vendorProgress([{ ...vendors[0]!, booked: true }, ...vendors.slice(1)]);
-    expect(progress.booked).toBe(1);
-    expect(progress.total).toBe(3);
-    expect(progress.ratio).toBeCloseTo(1 / 3);
-  });
-});
-
-describe("groupMilestonesByPhase", () => {
-  it("orders phases canonically, sorts by days descending and drops empty phases", () => {
-    const base = makePlan().timeline[0]!;
-    const mk = (phase: typeof base.phase, days: number, title: string) => ({
-      ...base,
-      id: crypto.randomUUID(),
-      phase,
-      daysBeforeEvent: days,
-      title,
-    });
-    const groups = groupMilestonesByPhase([
-      mk("booking", 10, "b-small"),
-      mk("event-day", 0, "day"),
-      mk("booking", 100, "b-big"),
-    ]);
-    expect(groups.map((g) => g.phase)).toEqual(["booking", "event-day"]);
-    expect(groups[0]?.milestones.map((m) => m.title)).toEqual(["b-big", "b-small"]);
-  });
-
-  it("returns an empty array for an empty timeline", () => {
-    expect(groupMilestonesByPhase([])).toEqual([]);
-  });
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, LIMITS.maxBudget + 1])(
+    "rejects %s",
+    (amount) => {
+      expect(isValidTotal(amount)).toBe(false);
+    },
+  );
 });

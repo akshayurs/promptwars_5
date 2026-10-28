@@ -1,7 +1,7 @@
 import type { MouseEvent, ReactElement, RefObject } from "react";
 
 import { Alert } from "@/components/ui/Alert";
-import type { FieldIssues } from "@/lib/client";
+import type { FieldIssues } from "@/lib/types";
 
 import { FIELD_LABELS, fieldId, type FieldKey } from "./fieldLabels";
 

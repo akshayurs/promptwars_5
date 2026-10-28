@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import { IntakeForm } from "@/components/IntakeForm";
 import { requestPlan, type ApiResult } from "@/lib/client";
-import { todayIso } from "@/lib/format";
+import { todayIso } from "@/lib/dates";
 import type { Plan } from "@/lib/schema";
 import { workspaceStore } from "@/lib/workspaceStore";
 

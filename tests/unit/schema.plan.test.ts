@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { LIMITS } from "@/lib/constants";
-import { GeneratedPlanSchema, LenientGeneratedPlanSchema, PlanSchema } from "@/lib/schema";
+import { GeneratedPlanSchema, LenientGeneratedPlanSchema } from "@/lib/generatedPlanSchema";
+import { PlanSchema } from "@/lib/schema";
 
 import { makeGeneratedPlan, makePlan } from "./fixtures";
 

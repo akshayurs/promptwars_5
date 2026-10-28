@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { milestoneProgress, nextMilestone, toggleMilestone } from "@/lib/budget";
+import {
+  compareMilestones,
+  groupMilestonesByPhase,
+  milestoneProgress,
+  nextMilestone,
+  toggleMilestone,
+} from "@/lib/milestones";
 import type { Milestone } from "@/lib/schema";
 import { createWorkspaceReducer } from "@/lib/workspace";
 
@@ -64,6 +70,16 @@ describe("nextMilestone", () => {
     expect(nextMilestone(timeline)?.title).toBe("mid");
   });
 
+  it("finds the earliest open milestone wherever it sits in the list", () => {
+    const timeline = [
+      milestone({ title: "done-far", daysBeforeEvent: 200, done: true }),
+      milestone({ title: "near", daysBeforeEvent: 2 }),
+      milestone({ title: "far", daysBeforeEvent: 60 }),
+      milestone({ title: "mid", daysBeforeEvent: 20 }),
+    ];
+    expect(nextMilestone(timeline)?.title).toBe("far");
+  });
+
   it("keeps input order for ties", () => {
     const timeline = [
       milestone({ title: "first", daysBeforeEvent: 10 }),
@@ -82,6 +98,39 @@ describe("nextMilestone", () => {
     const ids = timeline.map((m) => m.id);
     nextMilestone(timeline);
     expect(timeline.map((m) => m.id)).toEqual(ids);
+  });
+});
+
+describe("groupMilestonesByPhase", () => {
+  it("orders phases canonically, sorts by days descending and drops empty phases", () => {
+    const groups = groupMilestonesByPhase([
+      milestone({ phase: "booking", daysBeforeEvent: 10, title: "b-small" }),
+      milestone({ phase: "event-day", daysBeforeEvent: 0, title: "day" }),
+      milestone({ phase: "booking", daysBeforeEvent: 100, title: "b-big" }),
+    ]);
+    expect(groups.map((g) => g.phase)).toEqual(["booking", "event-day"]);
+    expect(groups[0]?.milestones.map((m) => m.title)).toEqual(["b-big", "b-small"]);
+  });
+
+  it("returns an empty array for an empty timeline", () => {
+    expect(groupMilestonesByPhase([])).toEqual([]);
+  });
+});
+
+describe("compareMilestones", () => {
+  it("orders by canonical phase before days", () => {
+    const planning = { phase: "planning", daysBeforeEvent: 1 } as const;
+    const booking = { phase: "booking", daysBeforeEvent: 300 } as const;
+    expect(compareMilestones(planning, booking)).toBeLessThan(0);
+    expect(compareMilestones(booking, planning)).toBeGreaterThan(0);
+  });
+
+  it("puts the milestone with more days before the event first within a phase", () => {
+    const early = { phase: "booking", daysBeforeEvent: 90 } as const;
+    const late = { phase: "booking", daysBeforeEvent: 30 } as const;
+    expect(compareMilestones(early, late)).toBeLessThan(0);
+    expect(compareMilestones(late, early)).toBeGreaterThan(0);
+    expect(compareMilestones(early, { ...early })).toBe(0);
   });
 });
 

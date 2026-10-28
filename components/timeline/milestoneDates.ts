@@ -1,5 +1,5 @@
 import { DUE_SOON_DAYS } from "@/lib/constants";
-import { daysUntil, shiftDate } from "@/lib/format";
+import { daysUntil, shiftDate } from "@/lib/dates";
 import type { Milestone } from "@/lib/schema";
 
 export const relativeLabel = (daysBeforeEvent: number): string => {

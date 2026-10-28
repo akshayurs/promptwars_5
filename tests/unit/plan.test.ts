@@ -8,7 +8,9 @@ import {
   mergeRefinedPlan,
   toPlan,
 } from "@/lib/plan";
-import { PlanSchema } from "@/lib/schema";
+import { DAY_MS } from "@/lib/constants";
+import { toIsoDay } from "@/lib/dates";
+import { PlanSchema, type GeneratedPlan } from "@/lib/schema";
 
 import { makeGeneratedPlan, makePlan } from "./fixtures";
 
@@ -192,14 +194,64 @@ describe("fitBudgetToTotal", () => {
 });
 
 describe("clampMilestones", () => {
+  type GeneratedMilestone = GeneratedPlan["timeline"][number];
+  const step = (title: string, phase: GeneratedMilestone["phase"], days: number) => ({
+    title,
+    phase,
+    daysBeforeEvent: days,
+    details: "d",
+  });
+  const titles = (plan: GeneratedPlan): string[] => plan.timeline.map((m) => m.title);
+
   it("caps daysBeforeEvent at the days remaining", () => {
     const clamped = clampMilestones(makeGeneratedPlan(), 30);
     expect(clamped.timeline.map((m) => m.daysBeforeEvent)).toEqual([30, 30, 14, 0]);
   });
 
-  it("leaves reachable milestones alone", () => {
+  it("keeps reachable milestones' days and orders them by phase", () => {
     const generated = makeGeneratedPlan();
-    expect(clampMilestones(generated, 365).timeline).toEqual(generated.timeline);
+    const clamped = clampMilestones(generated, 365);
+    expect(titles(clamped)).toEqual(["Pick theme", "Book venue", "Final headcount", "Wedding day"]);
+    expect(clamped.timeline.map((m) => m.daysBeforeEvent)).toEqual([240, 180, 14, 0]);
+    expect(titles(generated)).toEqual([
+      "Book venue",
+      "Pick theme",
+      "Final headcount",
+      "Wedding day",
+    ]);
+  });
+
+  it("orders each phase chronologically, most days before the event first", () => {
+    const generated = makeGeneratedPlan({
+      timeline: [
+        step("Book caterer", "booking", 60),
+        step("Day of", "event-day", 0),
+        step("Book venue", "booking", 120),
+        step("Set budget", "planning", 150),
+        step("Confirm", "final-prep", 3),
+        step("Seating plan", "final-prep", 10),
+      ],
+    });
+    expect(titles(clampMilestones(generated, 400))).toEqual([
+      "Set budget",
+      "Book venue",
+      "Book caterer",
+      "Seating plan",
+      "Confirm",
+      "Day of",
+    ]);
+  });
+
+  it("keeps the model's order for milestones that tie after clamping", () => {
+    const generated = makeGeneratedPlan({
+      timeline: [
+        step("Second", "booking", 90),
+        step("First", "booking", 200),
+        step("Third", "booking", 40),
+        step("Day", "event-day", 0),
+      ],
+    });
+    expect(titles(clampMilestones(generated, 50))).toEqual(["Second", "First", "Third", "Day"]);
   });
 
   it("treats past events as zero days remaining", () => {
@@ -217,10 +269,16 @@ describe("fitPlanToIntake", () => {
     );
     expect(fitted.budget.map((line) => line.amount)).toEqual([100_000, 75_000, 25_000]);
     expect(fitted.timeline.map((m) => m.daysBeforeEvent)).toEqual([20, 20, 14, 0]);
+    expect(fitted.timeline.map((m) => m.phase)).toEqual([
+      "planning",
+      "booking",
+      "final-prep",
+      "event-day",
+    ]);
   });
 
   it("defaults today to the current UTC day", () => {
-    const eventDate = new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10);
+    const eventDate = toIsoDay(Date.now() + 10 * DAY_MS);
     const fitted = fitPlanToIntake(makeGeneratedPlan(), { eventDate, totalBudget: 1e9 });
     expect(fitted.timeline.map((m) => m.daysBeforeEvent)).toEqual([10, 10, 10, 0]);
   });

@@ -1,7 +1,8 @@
 import { render, screen } from "@testing-library/react";
 
 import { NextUpCard } from "@/components/NextUpCard";
-import { formatDate, shiftDate, todayIso } from "@/lib/format";
+import { shiftDate, todayIso } from "@/lib/dates";
+import { formatDate } from "@/lib/format";
 import type { Milestone } from "@/lib/schema";
 
 const EVENT_DATE = "2030-06-15";

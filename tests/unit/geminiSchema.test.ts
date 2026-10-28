@@ -2,7 +2,7 @@ import { z } from "zod";
 import { describe, expect, it } from "vitest";
 
 import { toGeminiResponseSchema } from "@/lib/geminiSchema";
-import { GeneratedPlanSchema } from "@/lib/schema";
+import { GeneratedPlanSchema } from "@/lib/generatedPlanSchema";
 
 const DROPPED = ["$schema", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems"];
 

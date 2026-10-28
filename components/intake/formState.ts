@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 
-import type { FieldIssues } from "@/lib/client";
+import type { FieldIssues } from "@/lib/types";
 import { ADMISSION_TYPES, EVENT_TYPES } from "@/lib/constants";
 import type { EventType, Intake } from "@/lib/schema";
 

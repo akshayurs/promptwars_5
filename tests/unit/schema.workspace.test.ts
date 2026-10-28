@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { STORAGE_KEY, WORKSPACE_VERSION } from "@/lib/constants";
 import { RefineRequestSchema, StoredWorkspaceSchema } from "@/lib/schema";
 
 import { makeIntake, makePlan, makeWorkspace } from "./fixtures";
@@ -17,6 +18,13 @@ describe("RefineRequestSchema", () => {
     expect(RefineRequestSchema.safeParse({ ...valid, instruction: "ab" }).success).toBe(false);
     expect(RefineRequestSchema.safeParse({ ...valid, instruction: rep(500) }).success).toBe(true);
     expect(RefineRequestSchema.safeParse({ ...valid, instruction: rep(501) }).success).toBe(false);
+  });
+
+  it("explains instruction length problems in plain language", () => {
+    const message = (instruction: string) =>
+      RefineRequestSchema.safeParse({ ...valid, instruction }).error?.issues[0]?.message;
+    expect(message("  ab  ")).toBe("Enter a change of at least 3 characters");
+    expect(message(rep(501))).toBe("Enter a change of at most 500 characters");
   });
 
   it("rejects unknown keys and missing plan", () => {
@@ -44,10 +52,16 @@ describe("StoredWorkspaceSchema", () => {
     ).toBe(true);
   });
 
-  it("rejects wrong version", () => {
-    expect(StoredWorkspaceSchema.safeParse({ ...makeWorkspace(), version: 2 }).success).toBe(true);
-    expect(StoredWorkspaceSchema.safeParse({ ...makeWorkspace(), version: 1 }).success).toBe(false);
-    expect(StoredWorkspaceSchema.safeParse({ ...makeWorkspace(), version: 3 }).success).toBe(false);
+  it("accepts only the current version", () => {
+    const at = (version: number) =>
+      StoredWorkspaceSchema.safeParse({ ...makeWorkspace(), version }).success;
+    expect(at(WORKSPACE_VERSION)).toBe(true);
+    expect(at(WORKSPACE_VERSION - 1)).toBe(false);
+    expect(at(WORKSPACE_VERSION + 1)).toBe(false);
+  });
+
+  it("keys storage by the same version", () => {
+    expect(STORAGE_KEY).toBe(`eventcraft.plan.v${String(WORKSPACE_VERSION)}`);
   });
 
   it("requires an ISO datetime for savedAt", () => {

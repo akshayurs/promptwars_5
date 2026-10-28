@@ -1,4 +1,7 @@
-import { daysBetween, toIsoDay } from "@/lib/dates";
+import { sumAllocated } from "@/lib/budget";
+import { daysBetween, todayIso } from "@/lib/dates";
+import { compareMilestones } from "@/lib/milestones";
+import { floorMoney } from "@/lib/money";
 import type { GeneratedPlan, Intake, Milestone, Plan, Vendor } from "@/lib/schema";
 
 type IdFactory = () => string;
@@ -8,6 +11,7 @@ const defaultIds: IdFactory = () => crypto.randomUUID();
 const withIds = <T>(items: readonly T[], nextId: IdFactory): Array<T & { id: string }> =>
   items.map((item) => ({ ...item, id: nextId() }));
 
+/** Turns model output into a fresh plan: new ids, nothing booked and nothing done. */
 export const toPlan = (generated: GeneratedPlan, nextId: IdFactory = defaultIds): Plan => ({
   summary: generated.summary,
   budget: withIds(generated.budget, nextId),
@@ -16,23 +20,21 @@ export const toPlan = (generated: GeneratedPlan, nextId: IdFactory = defaultIds)
   ideas: withIds(generated.ideas, nextId),
 });
 
-const CENTS = 100;
-
-/** Scales budget lines down proportionally (floored to cents) when they exceed the total. */
+/** Scales budget lines down proportionally (floored to minor units) when they exceed the total. */
 export const fitBudgetToTotal = (generated: GeneratedPlan, totalBudget: number): GeneratedPlan => {
-  const allocated = generated.budget.reduce((sum, line) => sum + line.amount, 0);
+  const allocated = sumAllocated(generated.budget);
   if (allocated <= totalBudget) return generated;
   const ratio = totalBudget / allocated;
   return {
     ...generated,
-    budget: generated.budget.map((line) => ({
-      ...line,
-      amount: Math.floor(line.amount * ratio * CENTS) / CENTS,
-    })),
+    budget: generated.budget.map((line) => ({ ...line, amount: floorMoney(line.amount * ratio) })),
   };
 };
 
-/** Caps every milestone at the days remaining so none lands in the past. */
+/**
+ * Caps every milestone at the days remaining so none lands in the past, then orders the timeline
+ * by phase and chronologically within each phase (stable, so ties keep the model's order).
+ */
 export const clampMilestones = (
   generated: GeneratedPlan,
   daysUntilEvent: number,
@@ -40,18 +42,20 @@ export const clampMilestones = (
   const latest = Math.max(daysUntilEvent, 0);
   return {
     ...generated,
-    timeline: generated.timeline.map((milestone) => ({
-      ...milestone,
-      daysBeforeEvent: Math.min(milestone.daysBeforeEvent, latest),
-    })),
+    timeline: generated.timeline
+      .map((milestone) => ({
+        ...milestone,
+        daysBeforeEvent: Math.min(milestone.daysBeforeEvent, latest),
+      }))
+      .toSorted(compareMilestones),
   };
 };
 
-/** Applies the server-side consistency rules (budget total, reachable milestones) to model output. */
+/** Applies the server-side rules (budget fits the total, milestones reachable) to model output. */
 export const fitPlanToIntake = (
   generated: GeneratedPlan,
   intake: Pick<Intake, "eventDate" | "totalBudget">,
-  today: string = toIsoDay(new Date()),
+  today: string = todayIso(),
 ): GeneratedPlan =>
   clampMilestones(
     fitBudgetToTotal(generated, intake.totalBudget),
@@ -93,6 +97,10 @@ const carryCompletion = (
   }));
 };
 
+/**
+ * Builds the refined plan, carrying bookings (by vendor category) and completion (by milestone
+ * title) over from the previous plan; matches ignore case and surrounding spaces.
+ */
 export const mergeRefinedPlan = (
   previous: Plan,
   generated: GeneratedPlan,
@@ -106,6 +114,7 @@ export const mergeRefinedPlan = (
   };
 };
 
+/** Number of added, removed or changed items per plan section. */
 export type PlanDiff = { budget: number; timeline: number; vendors: number; ideas: number };
 
 const countChanges = <T>(
@@ -118,6 +127,7 @@ const countChanges = <T>(
   return Math.max(before.length, after.length) - matched;
 };
 
+/** Counts per-section changes between two plans, comparing content rather than ids. */
 export const diffPlans = (before: Plan, after: Plan): PlanDiff => ({
   budget: countChanges(before.budget, after.budget, (line) => `${line.category}:${line.amount}`),
   timeline: countChanges(before.timeline, after.timeline, (m) => `${m.title}:${m.daysBeforeEvent}`),

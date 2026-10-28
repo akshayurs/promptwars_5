@@ -4,9 +4,10 @@ import type { ReactElement } from "react";
 
 import { MilestoneItem, type Toggle } from "@/components/timeline/MilestoneItem";
 import { EYEBROW, SECTION_HEADING } from "@/components/ui/styles";
-import { groupMilestonesByPhase, milestoneProgress, type Phase } from "@/lib/budget";
 import { formatDate } from "@/lib/format";
+import { groupMilestonesByPhase, milestoneProgress } from "@/lib/milestones";
 import type { Milestone } from "@/lib/schema";
+import type { Phase } from "@/lib/types";
 
 export type TimelineProps = {
   timeline: readonly Milestone[];

@@ -2,7 +2,7 @@ import { useSyncExternalStore, type ReactElement } from "react";
 
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { CURRENCIES, LIMITS } from "@/lib/constants";
-import { todayIso } from "@/lib/format";
+import { todayIso } from "@/lib/dates";
 
 import { FIELD_LABELS } from "./fieldLabels";
 import { errorFor, type FieldsProps } from "./formState";

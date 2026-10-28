@@ -1,9 +1,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
-import { requestPlan, type FieldIssues } from "@/lib/client";
+import { requestPlan } from "@/lib/client";
 import { IntakeSchema } from "@/lib/schema";
 import { createWorkspace } from "@/lib/workspace";
+import type { FieldIssues } from "@/lib/types";
 import { workspaceStore } from "@/lib/workspaceStore";
 
 import { firstPathIssues } from "./formState";

@@ -1,5 +1,6 @@
-import { LIMITS, MILESTONE_PHASES } from "@/lib/constants";
-import type { BudgetLine, Milestone, Vendor } from "@/lib/schema";
+import { LIMITS } from "@/lib/constants";
+import { roundMoney } from "@/lib/money";
+import type { BudgetLine } from "@/lib/schema";
 
 export type BudgetStatus = {
   allocated: number;
@@ -8,11 +9,11 @@ export type BudgetStatus = {
   overBudget: boolean;
 };
 
-const roundMoney = (value: number): number => Math.round(value * 100) / 100;
-
-export const sumAllocated = (lines: readonly BudgetLine[]): number =>
+/** Sum of every line amount, rounded to the minor unit. */
+export const sumAllocated = (lines: ReadonlyArray<Pick<BudgetLine, "amount">>): number =>
   roundMoney(lines.reduce((total, line) => total + line.amount, 0));
 
+/** Allocation against the total budget: amount left, share used and whether it is overspent. */
 export const budgetStatus = (totalBudget: number, lines: readonly BudgetLine[]): BudgetStatus => {
   const allocated = sumAllocated(lines);
   const remaining = roundMoney(totalBudget - allocated);
@@ -24,59 +25,26 @@ export const budgetStatus = (totalBudget: number, lines: readonly BudgetLine[]):
   };
 };
 
+/** Whether a total budget is a positive, finite amount within the supported maximum. */
+export const isValidTotal = (amount: number): boolean =>
+  Number.isFinite(amount) && amount > 0 && amount <= LIMITS.maxBudget;
+
+/** Clamps a typed amount to 0..max and rounds it to the minor unit; non-numbers become 0. */
 export const sanitizeAmount = (raw: number, max: number): number => {
   if (!Number.isFinite(raw) || raw < 0) return 0;
   return roundMoney(Math.min(raw, max));
 };
 
-export const updateLineAmount = (
-  lines: readonly BudgetLine[],
-  id: string,
-  amount: number,
-): BudgetLine[] => lines.map((line) => (line.id === id ? { ...line, amount } : line));
+/** Sets one line's amount; returns the same array when no amount actually changes. */
+export const updateLineAmount = (lines: BudgetLine[], id: string, amount: number): BudgetLine[] =>
+  lines.some((line) => line.id === id && line.amount !== amount)
+    ? lines.map((line) => (line.id === id ? { ...line, amount } : line))
+    : lines;
 
-export const toggleVendor = (vendors: readonly Vendor[], id: string): Vendor[] =>
-  vendors.map((vendor) => (vendor.id === id ? { ...vendor, booked: !vendor.booked } : vendor));
-
-export type VendorProgress = { booked: number; total: number; ratio: number };
-
-export const vendorProgress = (vendors: readonly Vendor[]): VendorProgress => {
-  const booked = vendors.filter((vendor) => vendor.booked).length;
-  return { booked, total: vendors.length, ratio: vendors.length > 0 ? booked / vendors.length : 0 };
-};
-
-export type Phase = Milestone["phase"];
-
-export const groupMilestonesByPhase = (
-  timeline: readonly Milestone[],
-): ReadonlyArray<{ phase: Phase; milestones: Milestone[] }> =>
-  MILESTONE_PHASES.map((phase) => ({
-    phase,
-    milestones: timeline
-      .filter((milestone) => milestone.phase === phase)
-      .toSorted((a, b) => b.daysBeforeEvent - a.daysBeforeEvent),
-  })).filter((group) => group.milestones.length > 0);
-
-export const toggleMilestone = (timeline: readonly Milestone[], id: string): Milestone[] =>
-  timeline.map((milestone) =>
-    milestone.id === id ? { ...milestone, done: !milestone.done } : milestone,
-  );
-
-export type MilestoneProgress = { done: number; total: number; ratio: number };
-
-export const milestoneProgress = (timeline: readonly Milestone[]): MilestoneProgress => {
-  const done = timeline.filter((milestone) => milestone.done).length;
-  return { done, total: timeline.length, ratio: timeline.length > 0 ? done / timeline.length : 0 };
-};
-
-/** The earliest-due milestone that is still open, or null when everything is done. */
-export const nextMilestone = (timeline: readonly Milestone[]): Milestone | null =>
-  timeline
-    .filter((milestone) => !milestone.done)
-    .toSorted((a, b) => b.daysBeforeEvent - a.daysBeforeEvent)[0] ?? null;
-
+/** Appends a line unless the plan already has the maximum number of lines. */
 export const addBudgetLine = (lines: readonly BudgetLine[], line: BudgetLine): BudgetLine[] =>
   lines.length >= LIMITS.budgetLines.max ? [...lines] : [...lines, line];
 
+/** Removes a line unless the plan is already at the minimum number of lines. */
 export const removeBudgetLine = (lines: readonly BudgetLine[], id: string): BudgetLine[] =>
   lines.length <= LIMITS.budgetLines.min ? [...lines] : lines.filter((line) => line.id !== id);

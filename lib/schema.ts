@@ -1,46 +1,32 @@
 import { z } from "zod";
 
 import "@/lib/zod";
-import { LIMITS, MILESTONE_PHASES } from "@/lib/constants";
-import { IntakeFieldsSchema } from "@/lib/intakeSchema";
-import { truncateAtWord } from "@/lib/text";
+import { LIMITS, MILESTONE_PHASES, WORKSPACE_VERSION } from "@/lib/constants";
+import { boundedText, IntakeFieldsSchema } from "@/lib/intakeSchema";
 
 export {
   createIntakeSchema,
   IntakeSchema,
   type EventDetails,
-  type EventType,
   type Intake,
 } from "@/lib/intakeSchema";
+export type { EventType } from "@/lib/types";
 
 type Bounds = { min: number; max: number };
-type TextFactory<T extends z.ZodType<string>> = (max: number) => T;
+type TextFactory = (max: number) => z.ZodType<string>;
 type ListFactory = <T extends z.ZodType>(item: T, bounds: Bounds) => z.ZodType<Array<z.output<T>>>;
 
-// Descriptions are the only way limits reach the model: Gemini cannot serve length/count keywords.
-const strictText = (max: number) =>
-  z.string().trim().min(1).max(max).describe(`Plain text, under ${max} characters`);
-const strictList: ListFactory = (item, { min, max }) =>
-  z.array(item).min(min).max(max).describe(`${min} to ${max} items`);
+/** How plan strings and arrays are validated: exactly, or coerced to fit for model output. */
+export type PlanFactories = { text: TextFactory; list: ListFactory };
 
-// Model output is coerced to fit rather than rejected; minimum constraints still apply.
-const lenientText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .min(1)
-    .transform((value) => truncateAtWord(value, max));
-const lenientList: ListFactory = (item, { min, max }) =>
-  z
-    .array(item)
-    .min(min)
-    .transform((items) => items.slice(0, max));
+/** Enforces every limit exactly; the basis for stored plans and the model's response schema. */
+export const strictPlanFactories: PlanFactories = {
+  text: (max) => z.string().trim().min(1).max(max),
+  list: (item, { min, max }) => z.array(item).min(min).max(max),
+};
 
-const buildGeneratedPlanSchemas = <T extends z.ZodType<string>>(
-  text: TextFactory<T>,
-  list: ListFactory,
-) => {
-  const budgetLine = z.object({
+const buildPlanItems = ({ text, list }: PlanFactories) => ({
+  budgetLine: z.object({
     category: text(LIMITS.shortText),
     amount: z
       .number()
@@ -48,8 +34,8 @@ const buildGeneratedPlanSchemas = <T extends z.ZodType<string>>(
       .max(LIMITS.maxBudget)
       .describe("Amount in the event currency; all lines sum to at most the total budget"),
     rationale: text(LIMITS.mediumText),
-  });
-  const milestone = z.object({
+  }),
+  milestone: z.object({
     title: text(LIMITS.shortText),
     phase: z.enum(MILESTONE_PHASES),
     daysBeforeEvent: z
@@ -59,50 +45,61 @@ const buildGeneratedPlanSchemas = <T extends z.ZodType<string>>(
       .max(LIMITS.maxDaysBeforeEvent)
       .describe("Whole days before the event, 0 on event day, at most daysUntilEvent"),
     details: text(LIMITS.mediumText),
-  });
-  const vendor = z.object({
+  }),
+  vendor: z.object({
     category: text(LIMITS.shortText),
     whyNeeded: text(LIMITS.mediumText),
     questionsToAsk: list(text(LIMITS.mediumText), { min: 1, max: LIMITS.questionsPerVendor }),
-  });
-  const idea = z.object({
+  }),
+  idea: z.object({
     title: text(LIMITS.shortText),
     description: text(LIMITS.longText),
     inspiredBy: text(LIMITS.mediumText),
-  });
-  const plan = z.object({
-    summary: text(LIMITS.summaryText),
-    budget: list(budgetLine, LIMITS.budgetLines),
-    timeline: list(milestone, LIMITS.milestones),
-    vendors: list(vendor, LIMITS.vendors),
-    ideas: list(idea, LIMITS.ideas),
-  });
-  return { budgetLine, milestone, vendor, idea, plan };
+  }),
+});
+
+type PlanItems = ReturnType<typeof buildPlanItems>;
+
+/** A plan as the model returns it: no ids, booking or completion state. */
+export type GeneratedPlan = {
+  summary: string;
+  budget: Array<z.output<PlanItems["budgetLine"]>>;
+  timeline: Array<z.output<PlanItems["milestone"]>>;
+  vendors: Array<z.output<PlanItems["vendor"]>>;
+  ideas: Array<z.output<PlanItems["idea"]>>;
 };
 
-const strict = buildGeneratedPlanSchemas(strictText, strictList);
+/** Model-facing plan schema built from the given factories (see lib/generatedPlanSchema.ts). */
+export const buildGeneratedPlanSchema = (factories: PlanFactories): z.ZodType<GeneratedPlan> => {
+  const { text, list } = factories;
+  const items = buildPlanItems(factories);
+  return z.object({
+    summary: text(LIMITS.summaryText),
+    budget: list(items.budgetLine, LIMITS.budgetLines),
+    timeline: list(items.milestone, LIMITS.milestones),
+    vendors: list(items.vendor, LIMITS.vendors),
+    ideas: list(items.idea, LIMITS.ideas),
+  });
+};
 
-/** Source of the Gemini response JSON schema; must stay free of transforms. */
-export const GeneratedPlanSchema = strict.plan;
-/** Parses model output, truncating over-long strings and arrays instead of rejecting them. */
-export const LenientGeneratedPlanSchema = buildGeneratedPlanSchemas(lenientText, lenientList).plan;
-export type GeneratedPlan = z.infer<typeof GeneratedPlanSchema>;
+const { text, list } = strictPlanFactories;
+const items = buildPlanItems(strictPlanFactories);
 
 const withId = <T extends z.ZodRawShape>(shape: z.ZodObject<T>) =>
   shape.extend({ id: z.uuid() }).strict();
 
-const BudgetLineSchema = withId(strict.budgetLine);
-const MilestoneSchema = withId(strict.milestone).extend({ done: z.boolean() });
-const VendorSchema = withId(strict.vendor).extend({ booked: z.boolean() });
-const IdeaSchema = withId(strict.idea);
+const BudgetLineSchema = withId(items.budgetLine);
+const MilestoneSchema = withId(items.milestone).extend({ done: z.boolean() });
+const VendorSchema = withId(items.vendor).extend({ booked: z.boolean() });
+const IdeaSchema = withId(items.idea);
 
 export const PlanSchema = z
   .object({
-    summary: GeneratedPlanSchema.shape.summary,
-    budget: z.array(BudgetLineSchema).min(LIMITS.budgetLines.min).max(LIMITS.budgetLines.max),
-    timeline: z.array(MilestoneSchema).min(LIMITS.milestones.min).max(LIMITS.milestones.max),
-    vendors: z.array(VendorSchema).min(LIMITS.vendors.min).max(LIMITS.vendors.max),
-    ideas: z.array(IdeaSchema).min(LIMITS.ideas.min).max(LIMITS.ideas.max),
+    summary: text(LIMITS.summaryText),
+    budget: list(BudgetLineSchema, LIMITS.budgetLines),
+    timeline: list(MilestoneSchema, LIMITS.milestones),
+    vendors: list(VendorSchema, LIMITS.vendors),
+    ideas: list(IdeaSchema, LIMITS.ideas),
   })
   .strict();
 
@@ -116,14 +113,18 @@ export const RefineRequestSchema = z
   .object({
     intake: IntakeFieldsSchema,
     plan: PlanSchema,
-    instruction: z.string().trim().min(3).max(LIMITS.longText),
+    instruction: boundedText({
+      subject: "a change",
+      min: LIMITS.minInstructionChars,
+      max: LIMITS.longText,
+    }),
   })
   .strict();
 export type RefineRequest = z.infer<typeof RefineRequestSchema>;
 
 export const StoredWorkspaceSchema = z
   .object({
-    version: z.literal(2),
+    version: z.literal(WORKSPACE_VERSION),
     intake: IntakeFieldsSchema,
     plan: PlanSchema,
     previousPlan: PlanSchema.nullable(),

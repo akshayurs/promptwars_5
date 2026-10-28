@@ -6,7 +6,7 @@ import type { ReactElement } from "react";
 import { DoneMark } from "@/components/ui/DoneMark";
 import { CheckIcon, ChevronDownIcon } from "@/components/ui/Icons";
 import { CARD, CHECKBOX, SECTION_HEADING } from "@/components/ui/styles";
-import { vendorProgress } from "@/lib/budget";
+import { vendorProgress } from "@/lib/vendors";
 import type { Vendor } from "@/lib/schema";
 
 export type VendorChecklistProps = {

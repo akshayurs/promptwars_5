@@ -1,8 +1,7 @@
 import { z } from "zod";
 
 import { PlanSchema, type Intake, type Plan, type RefineRequest } from "@/lib/schema";
-
-export type FieldIssues = Record<string, string>;
+import type { FieldIssues } from "@/lib/types";
 
 export type ApiResult<T> =
   { ok: true; value: T } | { ok: false; message: string; issues: FieldIssues };
@@ -57,9 +56,11 @@ const postJson = async <T>({
     : failure("Unexpected response from server.");
 };
 
+/** Asks the server to generate a plan for the intake. */
 export const requestPlan = (intake: Intake, signal?: AbortSignal): Promise<ApiResult<Plan>> =>
   postJson({ url: "/api/plan", body: intake, schema: PlanSchema, ...(signal ? { signal } : {}) });
 
+/** Asks the server to revise the plan according to the planner's instruction. */
 export const requestRefinement = (
   request: RefineRequest,
   signal?: AbortSignal,

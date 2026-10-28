@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { DAY_MS, LIMITS } from "@/lib/constants";
+import { DAY_MS, DAYS_PER_YEAR, LIMITS } from "@/lib/constants";
+import { toIsoDay } from "@/lib/dates";
 import { createIntakeSchema, IntakeSchema } from "@/lib/schema";
 
 import { makeIntake, makeIntakeFor } from "./fixtures";
 
 const NOW = Date.UTC(2026, 5, 15, 13, 30);
-const isoDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+const isoDay = (ms: number): string => toIsoDay(ms);
 const TODAY = isoDay(NOW);
 const rep = (n: number): string => "a".repeat(n);
 
@@ -147,7 +148,7 @@ describe("IntakeSchema details", () => {
 });
 
 describe("createIntakeSchema date window", () => {
-  const schema = createIntakeSchema(() => NOW);
+  const schema = createIntakeSchema(() => new Date(NOW));
   const withDate = (eventDate: string) => schema.safeParse(makeIntake({ eventDate }));
 
   it("accepts today", () => {
@@ -169,7 +170,8 @@ describe("createIntakeSchema date window", () => {
   });
 
   it("accepts the last day of the horizon and rejects the next day", () => {
-    const horizon = Math.floor(NOW / DAY_MS) * DAY_MS + LIMITS.maxYearsAhead * 365 * DAY_MS;
+    const horizon =
+      Math.floor(NOW / DAY_MS) * DAY_MS + LIMITS.maxYearsAhead * DAYS_PER_YEAR * DAY_MS;
     expect(withDate(isoDay(horizon)).success).toBe(true);
     expect(withDate(isoDay(horizon + DAY_MS)).success).toBe(false);
   });

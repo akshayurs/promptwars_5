@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 
 import { SelectField, TextField } from "@/components/ui/Field";
-import type { FieldIssues } from "@/lib/client";
+import type { FieldIssues } from "@/lib/types";
 import { ADMISSION_TYPES, LIMITS } from "@/lib/constants";
 import type { EventType } from "@/lib/schema";
 

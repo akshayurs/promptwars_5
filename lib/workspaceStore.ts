@@ -14,6 +14,11 @@ export type WorkspaceStore = {
 
 const LOADING: WorkspaceSnapshot = { status: "loading", workspace: null };
 
+/**
+ * External store for `useSyncExternalStore`: loads the saved workspace lazily, persists every
+ * change and follows edits made in other tabs. Dispatches that leave the state object unchanged
+ * neither persist nor notify.
+ */
 export const createWorkspaceStore = (
   storage: () => Storage | null,
   reducer = workspaceReducer,
@@ -57,4 +62,5 @@ export const createWorkspaceStore = (
   };
 };
 
+/** The browser's workspace store, backed by localStorage. */
 export const workspaceStore: WorkspaceStore = createWorkspaceStore(browserStorage);
