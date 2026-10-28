@@ -12,22 +12,32 @@ the client.
 ## Decision
 
 - Call `gemini-2.5-flash` with `responseMimeType: "application/json"` and `responseJsonSchema`
-  generated from `GeneratedPlanSchema` using `z.toJSONSchema` ([lib/gemini.ts](../lib/gemini.ts)).
-  One Zod schema is both the contract sent to the model and the validator
-  ([lib/schema.ts](../lib/schema.ts)).
-- Re-validate every response with `GeneratedPlanSchema.safeParse`. Field lengths and array sizes
-  use `LIMITS` in [lib/constants.ts](../lib/constants.ts) (for example 3-15 budget lines, 4-25
-  milestones, 3-15 vendors, 3-10 ideas, at most 5 questions per vendor).
+  generated from `GeneratedPlanSchema` with `z.toJSONSchema`
+  ([lib/gemini.ts](../lib/gemini.ts), [lib/generatedPlanSchema.ts](../lib/generatedPlanSchema.ts)).
+  Gemini rejects schemas with many constraints, so [lib/geminiSchema.ts](../lib/geminiSchema.ts)
+  strips `minLength`, `maxLength`, `minimum`, `maximum`, `minItems`, `maxItems` and `$schema`
+  first; the limits reach the model as `description` text instead.
+- Parse every response with `LenientGeneratedPlanSchema` (server-only, same file). It enforces the
+  minimums, but truncates over-long text at a word boundary and drops list items beyond the
+  maximum instead of rejecting the plan. Field lengths and array sizes use `LIMITS` in
+  [lib/constants.ts](../lib/constants.ts) (3-15 budget lines, 4-25 milestones, 3-15 vendors,
+  3-10 ideas, at most 5 questions per vendor). The strict `PlanSchema` in
+  [lib/schema.ts](../lib/schema.ts) still validates the finished plan on the client and in storage.
 - Retry once on malformed output (empty, invalid JSON or schema mismatch). Timeouts and upstream
-  errors are not retried. Failures map to `PlanGenerationError` codes `malformed`, `timeout` and
-  `upstream`, returned as 502, 504 and 502 ([lib/api/planRoute.ts](../lib/api/planRoute.ts)).
-- Keep ids and `booked` out of the model contract. The server adds UUIDs and `booked: false`
-  ([lib/plan.ts](../lib/plan.ts)); on refinement it carries bookings over by normalised vendor
-  category.
-- Bound cost and latency with `maxOutputTokens: 16384`, `thinkingBudget: 512` and a 45 second
-  abort ([API in lib/constants.ts](../lib/constants.ts)).
-- Wrap user data in tagged blocks and instruct the model to treat them as data
-  ([lib/prompts.ts](../lib/prompts.ts)).
+  errors are not retried, and a response whose finish reason is not `STOP` is an upstream failure.
+  Failures map to `PlanGenerationError` codes `malformed` (502), `upstream` (502), `timeout` (504)
+  and `busy` (503, when Gemini answers 429 or 503; sent with `Retry-After`)
+  ([lib/api/planRoute.ts](../lib/api/planRoute.ts)).
+- Keep ids, `done` and `booked` out of the model contract. The server adds UUIDs, `done: false`
+  and `booked: false` ([lib/plan.ts](../lib/plan.ts)); on refinement it carries bookings over by
+  normalised vendor category and completion by normalised milestone title. It also scales the
+  budget down to the total and clamps lead times to the days remaining (`fitPlanToIntake`).
+- Bound cost and latency with `maxOutputTokens: 16384`, `thinkingBudget: 512`, temperature 0.7
+  for generation and 0.3 for refinement, and a 45 second abort (`API` in
+  [lib/constants.ts](../lib/constants.ts)).
+- Wrap user data in tagged blocks (`<intake>`, `<current_plan>`, `<keep>`, `<request>`),
+  escape `<` inside them and instruct the model to treat them as data
+  ([lib/prompts.ts](../lib/prompts.ts), [lib/promptBlocks.ts](../lib/promptBlocks.ts)).
 
 ## Consequences
 
@@ -36,7 +46,8 @@ the client.
 - Schema changes are made in one place and automatically update the model contract. Changing
   `PlanSchema` also affects stored data; see [ADR-002](ADR-002-localstorage-persistence.md).
 - Schema constraints do not guarantee quality: the model can still return budgets that exceed the
-  total. The UI shows an over-budget warning rather than rejecting the plan.
+  total. The server scales the amounts down to fit, and the UI shows an over-budget warning if the
+  planner later raises them.
 - A retry can double latency in the worst case, bounded by the shared 45 second signal.
 - The model name and SDK version are pinned; changing either requires re-running the test suite
   because the response shape is part of the contract.
