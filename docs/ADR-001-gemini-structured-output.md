@@ -54,6 +54,7 @@ the client.
 - Schema constraints do not guarantee quality: the model can still return budgets that exceed the
   total. The server scales the amounts down to fit, and the UI shows an over-budget warning if the
   planner later raises them.
-- A retry can double latency in the worst case, bounded by the shared 45 second signal.
+- A retry can double latency in the worst case, bounded by the shared 45 second signal; the
+  vendor-coverage retry runs only when the first call finished within 20 seconds.
 - The model name and SDK version are pinned; changing either requires re-running the test suite
   because the response shape is part of the contract.

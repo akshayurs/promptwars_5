@@ -16,7 +16,8 @@ and `dom` (jsdom: `tests/components/**` plus the unit files that need a browser,
 
 - **Gemini SDK (unit):** [tests/unit/gemini.test.ts](../tests/unit/gemini.test.ts) builds a
   `ModelClient` with a `vi.fn` `generateContent`, so no network call is made. It covers valid JSON,
-  empty output, invalid JSON, schema mismatches, the single malformed retry, timeouts and upstream
+  empty output, invalid JSON, schema mismatches, the shared single retry (malformed output or a
+  vendor-coverage gap, including the elapsed-time limit on the coverage retry), timeouts and upstream
   errors. [tests/unit/deps.test.ts](../tests/unit/deps.test.ts) mocks `@/lib/gemini` and
   `@/lib/env` to check lazy construction.
 - **Route dependencies (API):** [tests/api/routes.test.ts](../tests/api/routes.test.ts) mocks

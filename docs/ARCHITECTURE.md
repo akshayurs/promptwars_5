@@ -63,7 +63,8 @@ app/api/{plan|refine}/route.ts
            thinkingBudget 512, BLOCK_MEDIUM_AND_ABOVE safety settings)
         -> JSON.parse -> LenientGeneratedPlanSchema; one shared retry for a malformed
            reply or for supplier budget lines left without a vendor (the first
-           valid plan is kept if the retry fails or covers less)
+           valid plan is kept if the retry fails or covers less; the coverage retry
+           runs only if the first call finished within 20 s)
   9. plan:   toPlan(fitPlanToIntake(generated, intake))
      refine: mergeRefinedPlan(previous, fitPlanToIntake(generated, intake))
   |
