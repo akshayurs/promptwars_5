@@ -73,6 +73,13 @@ describe("SelectField", () => {
     expect(select.getAttribute("aria-describedby")).toBe("pick-error");
   });
 
+  it("wires the hint and error together", () => {
+    render(<SelectField id="pick" label="Pick" options={options} hint="Hint" error="Choose one" />);
+    expect(screen.getByLabelText("Pick").getAttribute("aria-describedby")).toBe(
+      "pick-hint pick-error",
+    );
+  });
+
   it("has no aria-invalid without error", () => {
     render(<SelectField id="pick" label="Pick" options={options} />);
     expect(screen.getByLabelText("Pick")).not.toHaveAttribute("aria-invalid");
