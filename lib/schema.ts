@@ -3,6 +3,7 @@ import { z } from "zod";
 import "@/lib/zod";
 import { LIMITS, MILESTONE_PHASES } from "@/lib/constants";
 import { IntakeFieldsSchema } from "@/lib/intakeSchema";
+import { truncateAtWord } from "@/lib/text";
 
 export {
   createIntakeSchema,
@@ -28,7 +29,7 @@ const lenientText = (max: number) =>
     .string()
     .trim()
     .min(1)
-    .transform((value) => value.slice(0, max));
+    .transform((value) => truncateAtWord(value, max));
 const lenientList: ListFactory = (item, { min, max }) =>
   z
     .array(item)

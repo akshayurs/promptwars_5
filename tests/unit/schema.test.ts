@@ -277,7 +277,7 @@ describe("LenientGeneratedPlanSchema", () => {
       summary: `  ${rep(700)}  `,
       ideas: [{ ...idea, description: rep(LIMITS.longText + 5) }, ...base.ideas.slice(1)],
     });
-    expect(parsed.summary).toBe(rep(LIMITS.summaryText));
+    expect(parsed.summary).toBe(`${rep(LIMITS.summaryText - 1)}…`);
     expect(parsed.ideas[0]?.description).toHaveLength(LIMITS.longText);
     expect(GeneratedPlanSchema.safeParse(parsed).success).toBe(true);
   });

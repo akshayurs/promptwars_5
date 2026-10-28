@@ -20,6 +20,7 @@ export const LIMITS = {
   vendors: { min: 3, max: 15 },
   ideas: { min: 3, max: 10 },
   questionsPerVendor: 5,
+  truncationMinKeepRatio: 0.6,
   requestBodyBytes: 32_768,
 } as const;
 
