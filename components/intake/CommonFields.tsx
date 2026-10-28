@@ -1,31 +1,35 @@
+"use client";
+
 import { useSyncExternalStore, type ReactElement } from "react";
 
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { CURRENCIES, LIMITS } from "@/lib/constants";
-import { todayIso } from "@/lib/dates";
+import { shiftDate, todayIso } from "@/lib/dates";
 
 import { FIELD_LABELS } from "./fieldLabels";
 import { errorFor, type FieldsProps } from "./formState";
 
 const noSubscription = (): (() => void) => () => undefined;
-const serverToday = (): undefined => undefined;
+const serverMinimum = (): undefined => undefined;
+// "Today" is the UTC day; the grace day keeps the visitor's local today selectable west of UTC.
+const minimumDate = (): string => shiftDate(todayIso(), -LIMITS.pastDateGraceDays);
 
-// The server cannot know the visitor's local date, so `min` is only set after hydration.
-const useLocalToday = (): string | undefined =>
-  useSyncExternalStore(noSubscription, todayIso, serverToday);
+// The server cannot know the visitor's date, so `min` is only set after hydration.
+const useMinimumDate = (): string | undefined =>
+  useSyncExternalStore(noSubscription, minimumDate, serverMinimum);
 
 const DateField = ({
   value,
   issues,
   onChange,
 }: Omit<FieldsProps, "values"> & { value: string }): ReactElement => {
-  const today = useLocalToday();
+  const minimum = useMinimumDate();
   return (
     <TextField
       id="eventDate"
       label={FIELD_LABELS.eventDate}
       type="date"
-      {...(today ? { min: today } : {})}
+      {...(minimum ? { min: minimum } : {})}
       value={value}
       onChange={onChange("eventDate")}
       required

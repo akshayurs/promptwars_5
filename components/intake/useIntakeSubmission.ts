@@ -1,20 +1,24 @@
+"use client";
+
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
-import { requestPlan } from "@/lib/client";
-import { IntakeSchema } from "@/lib/schema";
-import { createWorkspace } from "@/lib/workspace";
+import { usePendingRequest, type PendingRequest } from "@/components/usePendingRequest";
+import { IntakeSchema, type Intake } from "@/lib/schema";
 import type { FieldIssues } from "@/lib/types";
-import { workspaceStore } from "@/lib/workspaceStore";
 
 import { firstPathIssues } from "./formState";
+import type { IntakeFlow } from "./intakeFlows";
 
 type Submission = {
   issues: FieldIssues;
   message: string | null;
-  busy: boolean;
   alertRef: RefObject<HTMLDivElement | null>;
-  submit: (candidate: unknown) => Promise<void>;
+  request: Omit<PendingRequest, "begin" | "settle">;
+  /** Name of the saved plan awaiting confirmation before it is replaced. */
+  replacing: string | null;
+  submit: (candidate: unknown, confirmed?: boolean) => void;
+  keepCurrent: () => void;
 };
 
 const useFocusOnFailure = (failures: number): RefObject<HTMLDivElement | null> => {
@@ -25,25 +29,15 @@ const useFocusOnFailure = (failures: number): RefObject<HTMLDivElement | null> =
   return alertRef;
 };
 
-const useAbortOnUnmount = (): RefObject<AbortController | null> => {
-  const controllerRef = useRef<AbortController | null>(null);
-  useEffect(
-    () => () => {
-      controllerRef.current?.abort();
-    },
-    [],
-  );
-  return controllerRef;
-};
-
-export const useIntakeSubmission = (): Submission => {
+/** Validates the intake, confirms before replacing a saved plan, then sends and saves it. */
+export const useIntakeSubmission = (flow: IntakeFlow): Submission => {
   const router = useRouter();
   const [issues, setIssues] = useState<FieldIssues>({});
   const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [failures, setFailures] = useState(0);
+  const [replacing, setReplacing] = useState<string | null>(null);
   const alertRef = useFocusOnFailure(failures);
-  const controllerRef = useAbortOnUnmount();
+  const { begin, settle, ...request } = usePendingRequest(flow.copy);
 
   const fail = (text: string, fieldIssues: FieldIssues): void => {
     setIssues(fieldIssues);
@@ -51,30 +45,36 @@ export const useIntakeSubmission = (): Submission => {
     setFailures((count) => count + 1);
   };
 
-  const submit = async (candidate: unknown): Promise<void> => {
-    if (busy) return;
-    const parsed = IntakeSchema.safeParse(candidate);
-    if (!parsed.success) {
-      fail("Please correct the highlighted fields.", firstPathIssues(parsed.error.issues));
-      return;
-    }
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setBusy(true);
-    setMessage(null);
-    const result = await requestPlan(parsed.data, controller.signal);
-    if (controller.signal.aborted) return;
-    setBusy(false);
+  const send = async (intake: Intake): Promise<void> => {
+    const signal = begin();
+    const result = await flow.send(intake, signal);
+    if (!settle(signal)) return;
     if (!result.ok) {
       fail(result.message, result.issues);
       return;
     }
-    workspaceStore.dispatch({
-      type: "replace",
-      workspace: createWorkspace(parsed.data, result.value),
-    });
+    flow.save(intake, result.value);
     router.push("/plan");
   };
 
-  return { issues, message, busy, alertRef, submit };
+  const submit = (candidate: unknown, confirmed = false): void => {
+    if (request.busy) return;
+    const parsed = IntakeSchema.safeParse(candidate);
+    setReplacing(null);
+    if (!parsed.success) {
+      fail("Please correct the highlighted fields.", firstPathIssues(parsed.error.issues));
+      return;
+    }
+    setIssues({});
+    setMessage(null);
+    const replaced = confirmed ? null : flow.replaces();
+    if (replaced === null) void send(parsed.data);
+    else setReplacing(replaced);
+  };
+
+  const keepCurrent = (): void => {
+    setReplacing(null);
+  };
+
+  return { issues, message, alertRef, request, replacing, submit, keepCurrent };
 };

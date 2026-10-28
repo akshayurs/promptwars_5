@@ -1,8 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { createPlanFlow } from "@/components/intake/intakeFlows";
 import { IntakeForm } from "@/components/IntakeForm";
-import { requestPlan } from "@/lib/client";
+import type { requestPlan } from "@/lib/client";
 import { workspaceStore } from "@/lib/workspaceStore";
 
 import { futureDate, makePlan } from "./fixtures";
@@ -11,9 +12,9 @@ import { fillForm, fillValidWedding, submitForm } from "./intakeFormHelpers";
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("@/lib/client", () => ({ requestPlan: vi.fn() }));
 
-const mockedRequestPlan = vi.mocked(requestPlan);
+const mockedRequestPlan = vi.fn<typeof requestPlan>();
+const flow = createPlanFlow({ requestPlan: mockedRequestPlan });
 
 describe("IntakeForm event details", () => {
   beforeEach(() => {
@@ -24,7 +25,7 @@ describe("IntakeForm event details", () => {
 
   it("shows only the selected event type's details fieldset", async () => {
     const user = userEvent.setup();
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     const wedding = screen.getByRole("group", { name: "Wedding details" });
     expect(within(wedding).getByLabelText("Couple's names")).toBeRequired();
     expect(screen.queryByRole("group", { name: "Birthday details" })).not.toBeInTheDocument();
@@ -49,7 +50,7 @@ describe("IntakeForm event details", () => {
 
   it("keeps typed details when switching away and back", async () => {
     const user = userEvent.setup();
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await user.type(screen.getByLabelText("Couple's names"), "Asha and Ravi");
     await user.click(screen.getByRole("radio", { name: "Birthday" }));
     await user.click(screen.getByRole("radio", { name: "Wedding" }));
@@ -59,7 +60,7 @@ describe("IntakeForm event details", () => {
   it("submits the wedding details", async () => {
     const user = userEvent.setup();
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: makePlan() });
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
     await submitForm(user);
     await vi.waitFor(() => {
@@ -74,7 +75,7 @@ describe("IntakeForm event details", () => {
   it("submits community details with a boolean permit flag", async () => {
     const user = userEvent.setup();
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: makePlan() });
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillForm(user, futureDate(30));
     await user.click(screen.getByRole("radio", { name: "Community event" }));
     await user.selectOptions(screen.getByLabelText("Admission"), "ticketed");
@@ -91,7 +92,7 @@ describe("IntakeForm event details", () => {
   it("does not submit details of a type that is no longer selected", async () => {
     const user = userEvent.setup();
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: makePlan() });
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
     await user.click(screen.getByRole("radio", { name: "Community event" }));
     await submitForm(user);
@@ -106,7 +107,7 @@ describe("IntakeForm event details", () => {
 
   it.each(["0", "121", "7.5"])("rejects honoree age %s on the age field", async (age) => {
     const user = userEvent.setup();
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillForm(user, futureDate(30));
     await user.click(screen.getByRole("radio", { name: "Birthday" }));
     await user.type(screen.getByLabelText("Guest of honour's name"), "Aarav");
@@ -121,7 +122,7 @@ describe("IntakeForm event details", () => {
 
   it("flags a too-short couple name on that field", async () => {
     const user = userEvent.setup();
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillForm(user, futureDate(30));
     await user.type(screen.getByLabelText("Couple's names"), "A");
     await user.type(screen.getByLabelText(/^Ceremony style/), "Civil");
@@ -138,7 +139,7 @@ describe("IntakeForm event details", () => {
       message: "Check your inputs",
       issues: { "details.ceremonyStyle": "Tell us a little more" },
     });
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
     await submitForm(user);
     expect(await screen.findByText("Check your inputs")).toBeVisible();

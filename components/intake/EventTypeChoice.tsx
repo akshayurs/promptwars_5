@@ -1,16 +1,13 @@
+"use client";
+
 import type { ReactElement } from "react";
 
 import { CakeIcon, HeartIcon, UsersIcon } from "@/components/ui/Icons";
 import { EVENT_TYPES } from "@/lib/constants";
+import { EVENT_TYPE_LABELS } from "@/lib/eventTypes";
 import type { EventType } from "@/lib/schema";
 
 import type { FieldsProps } from "./formState";
-
-const EVENT_LABELS: Record<EventType, string> = {
-  wedding: "Wedding",
-  birthday: "Birthday",
-  community: "Community event",
-};
 
 const EVENT_ICONS: Record<EventType, typeof HeartIcon> = {
   wedding: HeartIcon,
@@ -38,7 +35,7 @@ export const EventTypeChoice = ({ values, onChange }: FieldsProps): ReactElement
               className="size-4 shrink-0 accent-brand focus-visible:outline-none"
             />
             <Icon className="size-4 text-brand" />
-            {EVENT_LABELS[type]}
+            {EVENT_TYPE_LABELS[type]}
           </label>
         );
       })}

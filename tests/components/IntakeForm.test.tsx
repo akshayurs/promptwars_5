@@ -1,8 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { createPlanFlow } from "@/components/intake/intakeFlows";
 import { IntakeForm } from "@/components/IntakeForm";
-import { requestPlan } from "@/lib/client";
+import type { requestPlan } from "@/lib/client";
 import type { Plan } from "@/lib/schema";
 import { workspaceStore } from "@/lib/workspaceStore";
 
@@ -12,9 +13,9 @@ import { fillForm, fillValidWedding } from "./intakeFormHelpers";
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("@/lib/client", () => ({ requestPlan: vi.fn() }));
 
-const mockedRequestPlan = vi.mocked(requestPlan);
+const mockedRequestPlan = vi.fn<typeof requestPlan>();
+const flow = createPlanFlow({ requestPlan: mockedRequestPlan });
 
 describe("IntakeForm", () => {
   beforeEach(() => {
@@ -24,7 +25,7 @@ describe("IntakeForm", () => {
   });
 
   it("renders the event type radio group with a legend", () => {
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     const group = screen.getByRole("group", { name: "Event type" });
     const radios = within(group).getAllByRole("radio");
     expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual([
@@ -38,7 +39,7 @@ describe("IntakeForm", () => {
 
   it("switches the selected event type", async () => {
     const user = userEvent.setup();
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await user.click(screen.getByRole("radio", { name: "Birthday" }));
     expect(screen.getByRole("radio", { name: "Birthday" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Wedding" })).not.toBeChecked();
@@ -46,7 +47,7 @@ describe("IntakeForm", () => {
 
   it("shows field errors for an empty submit and does not call the API", async () => {
     const user = userEvent.setup();
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
 
     const problem = screen.getByText("There is a problem").closest("[tabindex='-1']");
@@ -78,7 +79,7 @@ describe("IntakeForm", () => {
     const plan: Plan = makePlan();
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: plan });
     const date = futureDate(30);
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillForm(user, date);
     await user.click(screen.getByRole("radio", { name: "Birthday" }));
     await user.type(screen.getByLabelText("Guest of honour's name"), " Priya ");
@@ -112,7 +113,7 @@ describe("IntakeForm", () => {
 
   it("rejects a past date client-side", async () => {
     const user = userEvent.setup();
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillForm(user, "2001-01-01");
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
     expect(screen.getByLabelText("Event date")).toHaveAttribute("aria-invalid", "true");
@@ -126,7 +127,7 @@ describe("IntakeForm", () => {
       message: "Check your inputs",
       issues: { location: "We could not find that place" },
     });
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
 
@@ -142,7 +143,7 @@ describe("IntakeForm", () => {
   it("shows a general API failure without field errors", async () => {
     const user = userEvent.setup();
     mockedRequestPlan.mockResolvedValueOnce({ ok: false, message: "Network error.", issues: {} });
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
     expect(await screen.findByText("Network error.")).toBeVisible();

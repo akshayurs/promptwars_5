@@ -48,10 +48,11 @@ describe("RefinePanel", () => {
   it("renders heading, labelled textarea, buttons and an empty status region", () => {
     renderPanel();
     expect(screen.getByRole("heading", { name: "Refine with AI" })).toBeInTheDocument();
-    expect(screen.getByLabelText("What should change?")).toBeInTheDocument();
+    expect(screen.getByLabelText("What should change?")).toBeRequired();
     expect(screen.getByRole("button", { name: "Apply refinement" })).toBeEnabled();
-    expect(statusRegion()).toHaveAttribute("aria-live", "polite");
+    expect(statusRegion()).not.toHaveAttribute("aria-live");
     expect(statusRegion()).toBeEmptyDOMElement();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
   });
 
   it("rejects instructions shorter than 3 characters without calling the API", async () => {
@@ -59,8 +60,10 @@ describe("RefinePanel", () => {
     renderPanel();
     await user.type(screen.getByLabelText("What should change?"), "  a ");
     await user.click(screen.getByRole("button", { name: "Apply refinement" }));
-    expect(screen.getByText("Describe the change you want in a few words.")).toBeInTheDocument();
-    expect(screen.getByLabelText("What should change?")).toHaveAttribute("aria-invalid", "true");
+    const textarea = screen.getByLabelText("What should change?");
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(textarea).toHaveAccessibleDescription(/Describe the change you want in a few words\.$/);
+    expect(textarea).toHaveFocus();
     expect(mockedRefine).not.toHaveBeenCalled();
   });
 
@@ -84,11 +87,10 @@ describe("RefinePanel", () => {
     await waitFor(() => {
       expect(onApply).toHaveBeenCalledExactlyOnceWith(next);
     });
-    expect(mockedRefine).toHaveBeenCalledWith({
-      intake: workspace.intake,
-      plan: workspace.plan,
-      instruction: "make it greener",
-    });
+    expect(mockedRefine).toHaveBeenCalledWith(
+      { intake: workspace.intake, plan: workspace.plan, instruction: "make it greener" },
+      expect.any(AbortSignal),
+    );
     expect(statusRegion()).toHaveTextContent("Updated 1 budget line, 1 vendor.");
     expect(textarea).toHaveValue("");
   });
@@ -223,5 +225,72 @@ describe("RefinePanel", () => {
     expect(mockedRefine).toHaveBeenCalledTimes(1);
     pending.resolve({ ok: false, message: "stop", issues: {} });
     await screen.findByRole("button", { name: "Apply refinement" });
+  });
+
+  it("cancels a pending refinement, announces it and ignores the late result", async () => {
+    const user = userEvent.setup();
+    const pending = deferred();
+    const onApply = vi.fn();
+    renderPanel(makeWorkspace(), { onApply });
+    const textarea = screen.getByLabelText("What should change?");
+    await user.type(textarea, "add a band");
+    await user.click(screen.getByRole("button", { name: "Apply refinement" }));
+    const signal = mockedRefine.mock.calls[0]?.[1];
+    expect(signal?.aborted).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(signal?.aborted).toBe(true);
+    expect(statusRegion()).toHaveTextContent("Refinement cancelled.");
+    expect(statusRegion()).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply refinement" })).not.toHaveAttribute(
+      "aria-busy",
+    );
+    expect(textarea).toHaveValue("add a band");
+
+    await act(async () => {
+      pending.resolve({ ok: true, value: makePlan() });
+      await Promise.resolve();
+    });
+    expect(onApply).not.toHaveBeenCalled();
+    expect(statusRegion()).toHaveTextContent("Refinement cancelled.");
+  });
+
+  it("clears the cancellation notice when the next refinement starts", async () => {
+    const user = userEvent.setup();
+    deferred();
+    const second = deferred();
+    renderPanel();
+    await user.type(screen.getByLabelText("What should change?"), "add a band");
+    await user.click(screen.getByRole("button", { name: "Apply refinement" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Apply refinement" }));
+    expect(statusRegion()).toHaveTextContent("Asking Gemini to apply your change.");
+    second.resolve({ ok: false, message: "stop", issues: {} });
+    expect(await screen.findByText("stop")).toBeVisible();
+  });
+
+  it("aborts the pending request on unmount", async () => {
+    const user = userEvent.setup();
+    const pending = deferred();
+    const onApply = vi.fn();
+    const { unmount } = renderPanel(makeWorkspace(), { onApply });
+    await user.type(screen.getByLabelText("What should change?"), "add a band");
+    await user.click(screen.getByRole("button", { name: "Apply refinement" }));
+    const signal = mockedRefine.mock.calls[0]?.[1];
+    unmount();
+    expect(signal?.aborted).toBe(true);
+    pending.resolve({ ok: true, value: makePlan() });
+    await Promise.resolve();
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it("points total budget, guest count and date changes to the edit details page", () => {
+    renderPanel();
+    expect(screen.getByRole("link", { name: "Edit event details" })).toHaveAttribute(
+      "href",
+      "/plan/edit",
+    );
+    expect(screen.getByText(/To change the total budget, guest count or date/)).toBeVisible();
   });
 });

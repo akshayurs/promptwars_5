@@ -2,9 +2,11 @@ import { act, render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import userEvent from "@testing-library/user-event";
 
+import { createPlanFlow } from "@/components/intake/intakeFlows";
 import { IntakeForm } from "@/components/IntakeForm";
-import { requestPlan, type ApiResult } from "@/lib/client";
-import { todayIso } from "@/lib/dates";
+import type { requestPlan, ApiResult } from "@/lib/client";
+import { LIMITS } from "@/lib/constants";
+import { shiftDate, todayIso } from "@/lib/dates";
 import type { Plan } from "@/lib/schema";
 import { workspaceStore } from "@/lib/workspaceStore";
 
@@ -14,9 +16,9 @@ import { fillValidWedding } from "./intakeFormHelpers";
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("@/lib/client", () => ({ requestPlan: vi.fn() }));
 
-const mockedRequestPlan = vi.mocked(requestPlan);
+const mockedRequestPlan = vi.fn<typeof requestPlan>();
+const flow = createPlanFlow({ requestPlan: mockedRequestPlan });
 
 describe("IntakeForm submission lifecycle", () => {
   beforeEach(() => {
@@ -33,7 +35,7 @@ describe("IntakeForm submission lifecycle", () => {
         resolvers.push(r);
       }),
     );
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
 
@@ -56,7 +58,7 @@ describe("IntakeForm submission lifecycle", () => {
 
   it("refocuses the error summary on every failed submit", async () => {
     const user = userEvent.setup();
-    render(<IntakeForm />);
+    render(<IntakeForm flow={flow} />);
     const submit = screen.getByRole("button", { name: "Generate plan" });
     await user.click(submit);
     const problem = screen.getByText("There is a problem").closest("[tabindex='-1']");
@@ -72,9 +74,12 @@ describe("IntakeForm submission lifecycle", () => {
     expect(html).not.toMatch(/min="\d{4}-/);
   });
 
-  it("sets the date minimum to the local day after hydration", () => {
-    render(<IntakeForm />);
-    expect(screen.getByLabelText("Event date")).toHaveAttribute("min", todayIso());
+  it("sets the date minimum after hydration so the visitor's local today stays selectable", () => {
+    render(<IntakeForm flow={flow} />);
+    expect(screen.getByLabelText("Event date")).toHaveAttribute(
+      "min",
+      shiftDate(todayIso(), -LIMITS.pastDateGraceDays),
+    );
   });
 
   it("aborts the request on unmount and ignores the late result", async () => {
@@ -85,7 +90,7 @@ describe("IntakeForm submission lifecycle", () => {
         resolvers.push(r);
       }),
     );
-    const { unmount } = render(<IntakeForm />);
+    const { unmount } = render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
     const signal = mockedRequestPlan.mock.calls[0]?.[1];

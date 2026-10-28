@@ -1,16 +1,13 @@
+"use client";
+
 import { useId, type ReactElement } from "react";
 
 import { CalendarIcon, MapPinIcon, UsersIcon, WalletIcon } from "@/components/ui/Icons";
 import { CARD, EYEBROW, badgeClass } from "@/components/ui/styles";
 import { daysUntil } from "@/lib/dates";
+import { ADMISSION_LABELS, EVENT_TYPE_LABELS } from "@/lib/eventTypes";
 import { formatDate, formatMoney } from "@/lib/format";
-import type { EventType, Intake, StoredWorkspace } from "@/lib/schema";
-
-const EVENT_LABELS: Record<EventType, string> = {
-  wedding: "Wedding",
-  birthday: "Birthday",
-  community: "Community event",
-};
+import type { Intake } from "@/lib/schema";
 
 const countdownLabel = (days: number): string => {
   if (days < 0) return "";
@@ -28,7 +25,7 @@ const detailsSummary = (intake: Intake): string => {
     case "birthday":
       return `${intake.details.honoreeName} turns ${intake.details.honoreeAge}`;
     case "community": {
-      const admission = intake.details.admission === "free" ? "Free" : "Ticketed";
+      const admission = ADMISSION_LABELS[intake.details.admission];
       const permit = intake.details.needsPermit ? "permit required" : "no permit needed";
       return `${admission} admission · ${permit}`;
     }
@@ -92,13 +89,11 @@ const Brief = ({ intake }: { intake: Intake }): ReactElement => {
   );
 };
 
-export const EventFacts = ({ workspace }: { workspace: StoredWorkspace }): ReactElement => {
-  const { intake } = workspace;
-  return (
-    <div className="flex flex-col gap-4">
-      <p className={badgeClass("brand")}>{EVENT_LABELS[intake.eventType]}</p>
-      <FactList intake={intake} />
-      <Brief intake={intake} />
-    </div>
-  );
-};
+/** Event type badge, key facts and the brief the planner wrote. */
+export const EventFacts = ({ intake }: { intake: Intake }): ReactElement => (
+  <div className="flex flex-col gap-4">
+    <p className={badgeClass("brand")}>{EVENT_TYPE_LABELS[intake.eventType]}</p>
+    <FactList intake={intake} />
+    <Brief intake={intake} />
+  </div>
+);

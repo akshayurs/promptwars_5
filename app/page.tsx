@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactElement } from "react";
 
+import { ExistingPlanNotice } from "@/components/intake/ExistingPlanNotice";
+import { ImportPlan } from "@/components/intake/ImportPlan";
 import { IntakeForm } from "@/components/IntakeForm";
 import {
   BulbIcon,
@@ -51,9 +53,11 @@ export default function HomePage(): ReactElement {
           ))}
         </ul>
       </section>
+      <ExistingPlanNotice />
       <div className={CARD_PADDED}>
         <IntakeForm />
       </div>
+      <ImportPlan />
     </div>
   );
 }

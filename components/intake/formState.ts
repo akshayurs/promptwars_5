@@ -1,13 +1,14 @@
+"use client";
+
 import { useState, type ChangeEvent } from "react";
 
-import type { FieldIssues } from "@/lib/types";
+import type { Admission, FieldIssues } from "@/lib/types";
 import { ADMISSION_TYPES, EVENT_TYPES } from "@/lib/constants";
 import type { EventType, Intake } from "@/lib/schema";
 
 export type CommonKey = Exclude<keyof Intake, "details">;
 export type FormValues = Record<CommonKey, string>;
 export type ControlEvent = ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>;
-export type Admission = (typeof ADMISSION_TYPES)[number];
 
 export type DetailsValues = {
   wedding: { coupleNames: string; ceremonyStyle: string };
@@ -80,8 +81,36 @@ export const errorFor = (
   key: string,
 ): { error: string } | Record<string, never> => (issues[key] ? { error: issues[key] } : {});
 
-export const useDetailsState = (): [DetailsValues, DetailsUpdate] => {
-  const [details, setDetails] = useState<DetailsValues>(EMPTY_DETAILS);
+/** Form values pre-filled from a saved intake, for editing the event details. */
+export const toFormValues = (intake: Intake): FormValues => ({
+  eventType: intake.eventType,
+  eventName: intake.eventName,
+  eventDate: intake.eventDate,
+  guestCount: String(intake.guestCount),
+  totalBudget: String(intake.totalBudget),
+  currency: intake.currency,
+  location: intake.location,
+  vibe: intake.vibe,
+  mustHaves: intake.mustHaves,
+});
+
+const toDetailsValues = (intake: Intake): DetailsValues => {
+  switch (intake.eventType) {
+    case "wedding":
+      return { ...EMPTY_DETAILS, wedding: intake.details };
+    case "birthday": {
+      const { honoreeName, honoreeAge } = intake.details;
+      return { ...EMPTY_DETAILS, birthday: { honoreeName, honoreeAge: String(honoreeAge) } };
+    }
+    case "community":
+      return { ...EMPTY_DETAILS, community: intake.details };
+  }
+};
+
+export const useDetailsState = (initial?: Intake): [DetailsValues, DetailsUpdate] => {
+  const [details, setDetails] = useState<DetailsValues>(() =>
+    initial ? toDetailsValues(initial) : EMPTY_DETAILS,
+  );
   const update: DetailsUpdate = (type, patch) => {
     setDetails((current) => ({ ...current, [type]: { ...current[type], ...patch } }));
   };

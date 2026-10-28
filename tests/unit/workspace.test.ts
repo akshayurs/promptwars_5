@@ -190,3 +190,24 @@ describe("workspace reducer: setTotalBudget", () => {
     },
   );
 });
+
+describe("workspace reducer: updateIntake", () => {
+  it("stores the edited intake and adapted plan, stamps savedAt and drops undo history", () => {
+    const ws = makeWorkspace({ previousPlan: makePlan() });
+    const intake = makeIntake({ guestCount: 40, totalBudget: 90_000 });
+    const plan = makePlan({ summary: "Adapted to forty guests." });
+    expect(reducer(ws, { type: "updateIntake", intake, plan })).toEqual({
+      ...ws,
+      intake,
+      plan,
+      previousPlan: null,
+      savedAt: STAMP,
+    });
+  });
+
+  it("returns null on null state", () => {
+    expect(
+      reducer(null, { type: "updateIntake", intake: makeIntake(), plan: makePlan() }),
+    ).toBeNull();
+  });
+});

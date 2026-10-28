@@ -15,6 +15,7 @@ export type WorkspaceAction =
   | { type: "toggleVendor"; id: string }
   | { type: "toggleMilestone"; id: string }
   | { type: "applyPlan"; plan: Plan }
+  | { type: "updateIntake"; intake: Intake; plan: Plan }
   | { type: "undo" };
 
 /** Source of the current time as an ISO 8601 timestamp, used to stamp `savedAt`. */
@@ -90,6 +91,9 @@ export const createWorkspaceReducer =
     switch (action.type) {
       case "applyPlan":
         return touch(state, { plan: action.plan, previousPlan: state.plan }, now);
+      case "updateIntake":
+        // The old plan was fitted to the old details, so it is not offered for undo.
+        return touch(state, { intake: action.intake, plan: action.plan, previousPlan: null }, now);
       case "undo":
         return undo(state, now);
       case "setTotalBudget":

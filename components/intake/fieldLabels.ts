@@ -1,4 +1,4 @@
-/** Intake field labels keyed by issue path, in visual order; also drives the error summary links. */
+/** Intake field labels keyed by issue path, in visual order; also used for error summary links. */
 export const FIELD_LABELS = {
   eventName: "Event name",
   "details.coupleNames": "Couple's names",
@@ -15,7 +15,5 @@ export const FIELD_LABELS = {
   mustHaves: "Must-haves (optional)",
 } as const;
 
-export type FieldKey = keyof typeof FIELD_LABELS;
-
 /** Issue keys map to element ids: "details.honoreeAge" lives on the input with id "honoreeAge". */
-export const fieldId = (key: FieldKey): string => key.replace(/^details\./, "");
+export const fieldId = (key: string): string => key.replace(/^details\./, "");

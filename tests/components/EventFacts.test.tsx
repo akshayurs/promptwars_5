@@ -3,10 +3,10 @@ import { render, screen } from "@testing-library/react";
 import { EventFacts } from "@/components/EventFacts";
 import type { EventType, Intake } from "@/lib/schema";
 
-import { makeIntake, makeIntakeFor, makeWorkspace } from "./fixtures";
+import { makeIntake, makeIntakeFor } from "./fixtures";
 
 const renderFacts = (intake: Intake): void => {
-  render(<EventFacts workspace={makeWorkspace({ intake })} />);
+  render(<EventFacts intake={intake} />);
 };
 
 const brief = (): HTMLElement => screen.getByRole("region", { name: "Your brief" });
