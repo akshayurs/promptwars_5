@@ -4,7 +4,13 @@ import type { z } from "zod";
 
 import { API, LIMITS } from "@/lib/constants";
 import { PlanGenerationError, type PlanGenerator } from "@/lib/gemini";
-import { clientKey, errorResponse, jsonResponse, readJsonBody } from "@/lib/http";
+import {
+  clientKey,
+  errorResponse,
+  isCrossSiteRequest,
+  jsonResponse,
+  readJsonBody,
+} from "@/lib/http";
 import type { Logger } from "@/lib/logger";
 import type { RateLimiter } from "@/lib/rateLimit";
 import type { Plan } from "@/lib/schema";
@@ -72,6 +78,12 @@ export const createPlanRoute =
   <TInput>(definition: RouteDefinition<TInput>, deps: RouteDependencies): PlanRoute =>
   async (request) => {
     const correlationId = crypto.randomUUID();
+    if (isCrossSiteRequest(request))
+      return errorResponse(
+        { error: "Cross-site requests are not allowed" },
+        { status: 403, correlationId },
+      );
+
     const decision = deps.limiter.consume(clientKey(request));
     if (!decision.allowed) {
       return errorResponse(

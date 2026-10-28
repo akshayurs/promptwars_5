@@ -80,6 +80,22 @@ export const clientKey = (request: Request): string =>
   nonEmpty(request.headers.get("x-real-ip")) ??
   "anonymous";
 
+const ALLOWED_FETCH_SITES: ReadonlySet<string> = new Set(["same-origin", "none"]);
+
+/**
+ * Rejects browser requests issued by other sites, which would spend this deployment's model quota.
+ * Browsers send Sec-Fetch-Site on every fetch; Origin covers older ones. Clients that send neither
+ * are not browsers and are left to the rate limiter.
+ */
+export const isCrossSiteRequest = (request: Request): boolean => {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite !== null) return !ALLOWED_FETCH_SITES.has(fetchSite);
+  const origin = request.headers.get("origin");
+  if (origin === null) return false;
+  const host = request.headers.get("host") ?? new URL(request.url).host;
+  return URL.parse(origin)?.host !== host;
+};
+
 export type ApiErrorBody = {
   error: string;
   correlationId: string;

@@ -35,4 +35,16 @@ test.describe("security headers and API guards", () => {
     });
     expect(response.status()).toBe(413);
   });
+
+  test("POST /api/plan and /api/refine reject cross-site requests with 403", async ({
+    request,
+  }) => {
+    for (const path of ["/api/plan", "/api/refine"]) {
+      const response = await request.post(path, {
+        headers: { "Content-Type": "application/json", Origin: "https://attacker.example" },
+        data: "{}",
+      });
+      expect(response.status()).toBe(403);
+    }
+  });
 });

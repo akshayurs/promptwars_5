@@ -98,6 +98,40 @@ describe("createPlanRoute", () => {
     expect(res.status).toBe(400);
   });
 
+  it.each([
+    ["Sec-Fetch-Site cross-site", { "sec-fetch-site": "cross-site" }],
+    ["Sec-Fetch-Site same-site", { "sec-fetch-site": "same-site" }],
+    ["a foreign Origin", { origin: "https://attacker.example" }],
+    ["a malformed Origin", { origin: "null" }],
+  ])("returns 403 without calling the model for %s", async (_label, headers) => {
+    const res = await call(build(), valid(), headers);
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toBe(
+      "Cross-site requests are not allowed",
+    );
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Sec-Fetch-Site same-origin", { "sec-fetch-site": "same-origin" }],
+    ["a matching Origin", { origin: "http://localhost" }],
+    ["a matching Origin behind a Host header", { origin: "https://app.test", host: "app.test" }],
+    ["no browser headers", {}],
+  ])("accepts requests with %s", async (_label, headers) => {
+    generate.mockResolvedValue(makeGeneratedPlan());
+    const res = await call(build(), valid(), headers);
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects cross-site requests before they consume rate-limit tokens", async () => {
+    generate.mockResolvedValue(makeGeneratedPlan());
+    const route = build(1);
+    const client = { "x-forwarded-for": "client-c" };
+    await call(route, valid(), { ...client, "sec-fetch-site": "cross-site" });
+    const res = await call(route, valid(), client);
+    expect(res.status).toBe(200);
+  });
+
   it("returns 429 with Retry-After once capacity is exhausted", async () => {
     generate.mockResolvedValue(makeGeneratedPlan());
     const route = build(2);
