@@ -9,7 +9,7 @@ const createNonce = (): string =>
   Buffer.from(crypto.getRandomValues(new Uint8Array(NONCE_BYTES))).toString("base64");
 
 /** Page CSP: nonce-locked scripts and styles, no framing, violations reported to our endpoint. */
-export const buildContentSecurityPolicy = (nonce: string, isDevelopment: boolean): string =>
+const buildContentSecurityPolicy = (nonce: string, isDevelopment: boolean): string =>
   [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""}`,
