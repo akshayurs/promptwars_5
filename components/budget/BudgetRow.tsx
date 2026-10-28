@@ -10,7 +10,11 @@ import type { BudgetLine } from "@/lib/schema";
 import { amountInputId, type AmountChange, type Currency, type RemoveControl } from "./types";
 
 const AMOUNT_INPUT =
-  "min-h-11 w-36 rounded-lg border border-control bg-surface-raised px-3 py-2 text-right tabular-nums shadow-xs transition-colors hover:border-ink-muted focus-visible:border-brand focus-visible:outline-offset-1";
+  "min-h-11 w-28 rounded-lg border border-control bg-surface-raised px-3 py-2 text-right tabular-nums shadow-xs transition-colors hover:border-ink-muted focus-visible:border-brand focus-visible:outline-offset-1 sm:w-36";
+
+// On phones the rationale column collapses to zero width (still read as a cell by screen readers)
+// and a visual copy sits under the category, so the amount column stays on screen.
+export const RATIONALE_COLUMN = "sm:pr-3 max-sm:w-0 max-sm:p-0";
 
 type AmountInputProps = { line: BudgetLine; currency: Currency; onAmountChange: AmountChange };
 
@@ -77,8 +81,16 @@ export const BudgetRow = ({
   <tr className="border-b border-line align-middle transition-colors hover:bg-surface-muted/60">
     <th scope="row" className="py-3 pr-3 text-left font-semibold">
       {line.category}
+      <span
+        aria-hidden="true"
+        className="mt-1 block leading-relaxed font-normal text-ink-muted sm:hidden"
+      >
+        {line.rationale}
+      </span>
     </th>
-    <td className="py-3 pr-3 leading-relaxed text-ink-muted">{line.rationale}</td>
+    <td className={`py-3 leading-relaxed text-ink-muted ${RATIONALE_COLUMN}`}>
+      <span className="max-sm:sr-only">{line.rationale}</span>
+    </td>
     <td className="py-3 text-right tabular-nums">
       {onAmountChange ? (
         <AmountInput line={line} currency={currency} onAmountChange={onAmountChange} />

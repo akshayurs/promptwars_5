@@ -4,7 +4,7 @@ import { EYEBROW } from "@/components/ui/styles";
 import { formatMoney } from "@/lib/format";
 import type { BudgetLine } from "@/lib/schema";
 
-import { BudgetRow } from "./BudgetRow";
+import { BudgetRow, RATIONALE_COLUMN } from "./BudgetRow";
 import type { AmountChange, Currency, RemoveControl } from "./types";
 
 type BudgetGridProps = {
@@ -25,15 +25,15 @@ export const BudgetGrid = ({
   remove,
 }: BudgetGridProps): ReactElement => (
   <div className="relative -mx-5 overflow-x-auto px-5 sm:mx-0 sm:px-0">
-    <table className={`w-full border-collapse text-sm ${remove ? "min-w-[34rem]" : ""}`}>
+    <table className="w-full border-collapse text-sm">
       <caption className="sr-only">Budget allocation</caption>
       <thead>
         <tr className={`border-b border-line text-left ${EYEBROW}`}>
           <th scope="col" className="py-2.5 pr-3 font-semibold">
             Category
           </th>
-          <th scope="col" className="py-2.5 pr-3 font-semibold">
-            Why it matters
+          <th scope="col" className={`py-2.5 font-semibold ${RATIONALE_COLUMN}`}>
+            <span className="max-sm:sr-only">Why it matters</span>
           </th>
           <th scope="col" className="py-2.5 text-right font-semibold">
             Amount

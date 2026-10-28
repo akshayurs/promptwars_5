@@ -21,7 +21,13 @@ describe("BudgetTable (read-only)", () => {
     expect(screen.getByRole("columnheader", { name: "Amount" })).toBeInTheDocument();
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
     expect(screen.getByText(formatMoney(200_000, "INR"))).toBeInTheDocument();
-    expect(screen.getByText("Hall for guests")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Hall for guests" })).toBeInTheDocument();
+  });
+
+  it("keeps the row header name to the category when the rationale is repeated for phones", () => {
+    render(<BudgetTable lines={lines} totalBudget={500_000} currency="INR" />);
+    const header = screen.getByRole("rowheader", { name: lines[0]!.category });
+    expect(within(header).getByText(lines[0]!.rationale)).toHaveAttribute("aria-hidden", "true");
   });
 
   it("shows the allocated total in the footer", () => {

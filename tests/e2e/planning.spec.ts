@@ -97,6 +97,24 @@ test.describe("workspace", () => {
     ).toBeVisible();
   });
 
+  test("budget amounts and remove buttons stay within the viewport", async ({ page }) => {
+    await seedWorkspace(page, makeWorkspace());
+    await page.goto("/plan");
+    await expect(page.getByRole("table", { name: "Budget allocation" })).toBeVisible();
+
+    const viewportWidth = page.viewportSize()?.width ?? 0;
+    const controls = [
+      ...(await page.getByRole("spinbutton", { name: /amount/ }).all()),
+      ...(await page.getByRole("button", { name: /^Remove / }).all()),
+    ];
+    expect(controls.length).toBeGreaterThan(0);
+    for (const control of controls) {
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewportWidth);
+    }
+  });
+
   test("empty state links back to the intake form", async ({ page }) => {
     await page.goto("/plan");
     const notice = page.getByRole("status").filter({ hasText: "No plan yet" });
