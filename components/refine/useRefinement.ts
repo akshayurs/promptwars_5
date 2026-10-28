@@ -36,10 +36,14 @@ const TEXTS = {
 };
 const TOO_SHORT = "Describe the change you want in a few words.";
 const STALE_MESSAGE = "The plan changed while refining. Try again.";
+const DATE_OUT_OF_WINDOW =
+  "The event date is outside the planning window (today to five years ahead). " +
+  "Change it with Edit event details, then try again.";
 
 const outcome = (result: ApiResult<Plan>, before: Plan, stale: boolean): StatusMessage => {
   if (!result.ok) {
-    return { tone: "error", text: result.message };
+    const text = "intake.eventDate" in result.issues ? DATE_OUT_OF_WINDOW : result.message;
+    return { tone: "error", text };
   }
   if (stale) {
     return { tone: "error", text: STALE_MESSAGE };
