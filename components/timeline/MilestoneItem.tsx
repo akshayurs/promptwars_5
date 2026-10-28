@@ -1,5 +1,4 @@
-import * as Checkbox from "@radix-ui/react-checkbox";
-import type { ReactElement } from "react";
+import { useId, type ReactElement } from "react";
 
 import {
   milestoneDate,
@@ -7,9 +6,10 @@ import {
   relativeLabel,
   type Urgency,
 } from "@/components/timeline/milestoneDates";
-import { DoneMark } from "@/components/ui/DoneMark";
+import { bindToggle, CheckControl } from "@/components/ui/CheckControl";
 import { CheckIcon } from "@/components/ui/Icons";
-import { CARD, CHECKBOX, badgeClass } from "@/components/ui/styles";
+import { CARD, badgeClass } from "@/components/ui/styles";
+import type { Toggle } from "@/components/workspace/types";
 import { formatDate } from "@/lib/format";
 import type { Milestone } from "@/lib/schema";
 
@@ -45,48 +45,31 @@ const StatusBadge = ({
 const TITLE = "font-semibold";
 const TITLE_DONE = "font-semibold text-ink-muted line-through decoration-1";
 
-export type Toggle = ((id: string) => void) | undefined;
-
-type ItemProps = { milestone: Milestone; eventDate: string; onToggle: Toggle };
-
-const MilestoneControl = ({ milestone, onToggle }: Omit<ItemProps, "eventDate">): ReactElement =>
-  onToggle ? (
-    <Checkbox.Root
-      id={`milestone-${milestone.id}`}
-      checked={milestone.done}
-      aria-describedby={`milestone-${milestone.id}-date`}
-      onCheckedChange={() => {
-        onToggle(milestone.id);
-      }}
-      className={CHECKBOX}
-    >
-      <Checkbox.Indicator aria-hidden="true">
-        <CheckIcon />
-      </Checkbox.Indicator>
-    </Checkbox.Root>
-  ) : (
-    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center">
-      <DoneMark done={milestone.done} />
-      <span className="sr-only">{milestone.done ? "(done)" : "(open)"}</span>
-    </span>
-  );
+type ItemProps = { milestone: Milestone; eventDate: string; onToggle: Toggle | undefined };
 
 export const MilestoneItem = ({ milestone, eventDate, onToggle }: ItemProps): ReactElement => {
   const date = milestoneDate(eventDate, milestone);
   const urgency = milestoneUrgency(date, milestone.done);
   const titleClass = milestone.done ? TITLE_DONE : TITLE;
+  const id = useId();
   return (
     <li className={`${CARD} flex break-inside-avoid items-start gap-3 p-4`}>
-      <MilestoneControl milestone={milestone} onToggle={onToggle} />
+      <CheckControl
+        id={id}
+        checked={milestone.done}
+        describedBy={`${id}-date`}
+        readOnlyText={milestone.done ? "(done)" : "(open)"}
+        onToggle={bindToggle(onToggle, milestone.id)}
+      />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         {onToggle ? (
-          <label htmlFor={`milestone-${milestone.id}`} className={`cursor-pointer ${titleClass}`}>
+          <label htmlFor={id} className={`cursor-pointer ${titleClass}`}>
             {milestone.title}
           </label>
         ) : (
           <p className={titleClass}>{milestone.title}</p>
         )}
-        <p id={`milestone-${milestone.id}-date`} className="text-sm font-medium text-ink-muted">
+        <p id={`${id}-date`} className="text-sm font-medium text-ink-muted">
           <time dateTime={date}>{formatDate(date)}</time>
           {" · "}
           {relativeLabel(milestone.daysBeforeEvent)}

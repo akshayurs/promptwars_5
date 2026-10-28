@@ -1,16 +1,18 @@
-import { useState, type ReactElement } from "react";
+"use client";
+
+import { useId, type ReactElement } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { TrashIcon } from "@/components/ui/Icons";
-import { sanitizeAmount } from "@/lib/budget";
 import { LIMITS } from "@/lib/constants";
 import { formatMoney } from "@/lib/format";
 import type { BudgetLine } from "@/lib/schema";
 
 import { amountInputId, type AmountChange, type Currency, type RemoveControl } from "./types";
+import { isValidLineAmount, lineAmountError, useAmountDraft } from "./useAmountDraft";
 
 const AMOUNT_INPUT =
-  "min-h-11 w-28 rounded-lg border border-control bg-surface-raised px-3 py-2 text-right tabular-nums shadow-xs transition-colors hover:border-ink-muted focus-visible:border-brand focus-visible:outline-offset-1 sm:w-36";
+  "min-h-11 w-28 rounded-lg border border-control bg-surface-raised px-3 py-2 text-right tabular-nums shadow-xs transition-colors hover:border-ink-muted focus-visible:border-brand focus-visible:outline-offset-1 aria-[invalid=true]:border-danger aria-[invalid=true]:bg-danger-soft sm:w-36";
 
 // On phones the rationale column collapses to zero width (still read as a cell by screen readers)
 // and a visual copy sits under the category, so the amount column stays on screen.
@@ -18,29 +20,34 @@ export const RATIONALE_COLUMN = "sm:pr-3 max-sm:w-0 max-sm:p-0";
 
 type AmountInputProps = { line: BudgetLine; currency: Currency; onAmountChange: AmountChange };
 
-// A local draft lets the field be cleared while typing without committing 0.
 const AmountInput = ({ line, currency, onAmountChange }: AmountInputProps): ReactElement => {
-  const [draft, setDraft] = useState<string | null>(null);
+  const errorId = useId();
+  const field = useAmountDraft(line.amount, isValidLineAmount, (amount) => {
+    onAmountChange(line.id, amount);
+  });
   return (
-    <input
-      id={amountInputId(line.id)}
-      type="number"
-      inputMode="decimal"
-      aria-label={`${line.category} amount (${currency})`}
-      min={0}
-      max={LIMITS.maxBudget}
-      step={1}
-      value={draft ?? String(line.amount)}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        const raw = event.target.valueAsNumber;
-        if (Number.isFinite(raw)) onAmountChange(line.id, sanitizeAmount(raw, LIMITS.maxBudget));
-      }}
-      onBlur={() => {
-        setDraft(null);
-      }}
-      className={AMOUNT_INPUT}
-    />
+    <>
+      <input
+        id={amountInputId(line.id)}
+        type="number"
+        inputMode="decimal"
+        aria-label={`${line.category} amount (${currency})`}
+        aria-invalid={field.invalid || undefined}
+        aria-describedby={field.invalid ? errorId : undefined}
+        min={0}
+        max={LIMITS.maxBudget}
+        step={1}
+        value={field.value}
+        onChange={field.onChange}
+        onBlur={field.onBlur}
+        className={AMOUNT_INPUT}
+      />
+      {field.invalid ? (
+        <p id={errorId} className="mt-1 ml-auto max-w-36 text-sm font-medium text-danger">
+          {lineAmountError(currency)}
+        </p>
+      ) : null}
+    </>
   );
 };
 
@@ -57,7 +64,7 @@ const RemoveButton = ({
     aria-disabled={control.disabled || undefined}
     aria-describedby={control.disabled ? control.reasonId : undefined}
     onClick={() => {
-      if (!control.disabled) control.onRemove(line.id);
+      if (!control.disabled) control.onRemove(line);
     }}
   >
     <TrashIcon />

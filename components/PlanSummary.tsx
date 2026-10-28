@@ -4,15 +4,16 @@ import { useRouter } from "next/navigation";
 import type { ReactElement } from "react";
 
 import { BudgetTable } from "@/components/BudgetTable";
-import { IdeasList } from "@/components/IdeasList";
 import { EventFacts } from "@/components/EventFacts";
+import { IdeasList } from "@/components/IdeasList";
 import { SummaryActions } from "@/components/summary/SummaryActions";
 import { usePrintExpandedDetails } from "@/components/summary/usePrintExpandedDetails";
 import { Timeline } from "@/components/Timeline";
 import { PAGE_TITLE } from "@/components/ui/styles";
+import { useHeadingFocus } from "@/components/useHeadingFocus";
 import { useWorkspace } from "@/components/useWorkspace";
 import { VendorChecklist } from "@/components/VendorChecklist";
-import { EmptyWorkspace, LoadingNotice, useHeadingFocus } from "@/components/WorkspaceStates";
+import { EmptyWorkspace, LoadingNotice } from "@/components/WorkspaceStates";
 import type { StoredWorkspace } from "@/lib/schema";
 
 const LoadedSummary = ({
@@ -32,7 +33,7 @@ const LoadedSummary = ({
           {intake.eventName}
         </h1>
         <p className="max-w-3xl text-lg leading-relaxed text-pretty">{plan.summary}</p>
-        <EventFacts workspace={workspace} />
+        <EventFacts intake={workspace.intake} />
         <SummaryActions workspace={workspace} onReset={onReset} />
       </header>
       <BudgetTable

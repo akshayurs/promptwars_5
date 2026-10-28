@@ -6,6 +6,7 @@ import { STORAGE_KEY } from "@/lib/constants";
 import { workspaceStore } from "@/lib/workspaceStore";
 
 import { makeIntake, makeWorkspace, readStoredWorkspace } from "./fixtures";
+import { flushIdleCallbacks } from "./lazy";
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -98,6 +99,62 @@ describe("PlanSummary", () => {
     expect(anchors[0]?.download).toBe("event-plan.json");
   });
 
+  it.each([
+    ["Download calendar (.ics)", "asha-ravi-wedding-calendar.ics", "text/calendar;charset=utf-8"],
+    ["Download budget (CSV)", "asha-ravi-wedding-budget.csv", "text/csv;charset=utf-8"],
+  ])("%s downloads %s", async (label, fileName, type) => {
+    const user = userEvent.setup();
+    const blobs: Blob[] = [];
+    URL.createObjectURL = (blob: Blob) => {
+      blobs.push(blob);
+      return "blob:export";
+    };
+    const revokeUrl = vi.fn();
+    URL.revokeObjectURL = revokeUrl;
+    const anchors = stubAnchorClick();
+    render(<PlanSummary />);
+    await user.click(screen.getByRole("button", { name: label }));
+    expect(anchors[0]?.download).toBe(fileName);
+    expect(blobs[0]?.type).toBe(type);
+    await vi.waitFor(() => {
+      expect(revokeUrl).toHaveBeenCalledExactlyOnceWith("blob:export");
+    });
+  });
+
+  it("calendar export holds the event day and every milestone", async () => {
+    const user = userEvent.setup();
+    const blobs: Blob[] = [];
+    URL.createObjectURL = (blob: Blob) => {
+      blobs.push(blob);
+      return "blob:ics";
+    };
+    URL.revokeObjectURL = () => undefined;
+    stubAnchorClick();
+    render(<PlanSummary />);
+    await user.click(screen.getByRole("button", { name: "Download calendar (.ics)" }));
+    const text = (await blobs[0]?.text()) ?? "";
+    const { plan } = workspaceStore.getSnapshot().workspace!;
+    expect(text.match(/BEGIN:VEVENT/g)).toHaveLength(plan.timeline.length + 1);
+    expect(text).toContain("SUMMARY:Asha & Ravi Wedding");
+  });
+
+  it("budget export lists every line and a total", async () => {
+    const user = userEvent.setup();
+    const blobs: Blob[] = [];
+    URL.createObjectURL = (blob: Blob) => {
+      blobs.push(blob);
+      return "blob:csv";
+    };
+    URL.revokeObjectURL = () => undefined;
+    stubAnchorClick();
+    render(<PlanSummary />);
+    await user.click(screen.getByRole("button", { name: "Download budget (CSV)" }));
+    const rows = ((await blobs[0]?.text()) ?? "").split("\r\n");
+    expect(rows[0]).toBe("Category,Amount,Currency,Why it matters");
+    expect(rows).toContain("Venue,200000,INR,Hall for guests");
+    expect(rows).toContain("Total allocated,400000,INR,");
+  });
+
   it("asks for confirmation before deleting, and Keep it cancels", async () => {
     const user = userEvent.setup();
     render(<PlanSummary />);
@@ -126,9 +183,10 @@ describe("PlanSummary", () => {
     expect(workspaceStore.getSnapshot().workspace).toBeNull();
   });
 
-  it("shows the empty workspace when there is no plan", () => {
+  it("shows the empty workspace when there is no plan", async () => {
     workspaceStore.dispatch({ type: "replace", workspace: null });
     render(<PlanSummary />);
+    await flushIdleCallbacks();
     expect(screen.getByRole("status")).toHaveTextContent("No plan yet");
     expect(screen.getByRole("heading", { level: 1, name: "Summary" })).toBeVisible();
     expect(screen.getByRole("link", { name: "intake form" })).toHaveAttribute("href", "/");

@@ -1,62 +1,15 @@
-import { useId, useState, type ReactElement, type RefObject, type SubmitEvent } from "react";
+"use client";
+
+import { useId, type ReactElement, type RefObject } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
-import { sanitizeAmount } from "@/lib/budget";
 import { LIMITS } from "@/lib/constants";
-import type { BudgetLine } from "@/lib/schema";
 
-import type { AddLine, Currency } from "./types";
+import type { Currency } from "./types";
+import { useAddLineDraft, type AddLineDraft, type AddLineOptions } from "./useAddLineDraft";
 
-const DEFAULT_RATIONALE = "Added by you";
 const MAX_REASON = `A plan can have at most ${LIMITS.budgetLines.max} budget lines.`;
-
-type AddLineFormProps = {
-  atMax: boolean;
-  currency: Currency;
-  buttonRef: RefObject<HTMLButtonElement | null>;
-  onAdd: AddLine;
-};
-
-type AddDraft = { category: string; amount: string; rationale: string };
-
-const EMPTY_DRAFT: AddDraft = { category: "", amount: "0", rationale: "" };
-
-const toBudgetLine = (draft: AddDraft): BudgetLine => ({
-  id: crypto.randomUUID(),
-  category: draft.category.trim(),
-  amount: sanitizeAmount(Number(draft.amount), LIMITS.maxBudget),
-  rationale: draft.rationale.trim() || DEFAULT_RATIONALE,
-});
-
-const useAddLineDraft = (
-  atMax: boolean,
-  onAdd: AddLine,
-): {
-  draft: AddDraft;
-  error: string | undefined;
-  update: (patch: Partial<AddDraft>) => void;
-  submit: (event: SubmitEvent<HTMLFormElement>) => void;
-} => {
-  const [draft, setDraft] = useState<AddDraft>(EMPTY_DRAFT);
-  const [error, setError] = useState<string | undefined>(undefined);
-  const update = (patch: Partial<AddDraft>): void => {
-    setDraft((current) => ({ ...current, ...patch }));
-  };
-  const submit = (event: SubmitEvent<HTMLFormElement>): void => {
-    event.preventDefault();
-    if (atMax) return;
-    if (draft.category.trim() === "") {
-      setError("Enter a category.");
-      event.currentTarget.querySelector<HTMLInputElement>("input")?.focus();
-      return;
-    }
-    setError(undefined);
-    setDraft(EMPTY_DRAFT);
-    onAdd(toBudgetLine(draft));
-  };
-  return { draft, error, update, submit };
-};
 
 type AddLineSubmitProps = {
   atMax: boolean;
@@ -84,14 +37,65 @@ const AddLineSubmit = ({ atMax, reasonId, buttonRef }: AddLineSubmitProps): Reac
   </>
 );
 
-export const AddLineForm = ({
-  atMax,
+type LineFieldsProps = Omit<AddLineDraft, "submit"> & { id: string; currency: Currency };
+
+const LineFields = ({
+  id,
   currency,
-  buttonRef,
-  onAdd,
-}: AddLineFormProps): ReactElement => {
+  draft,
+  errors,
+  update,
+  categoryRef,
+  amountRef,
+}: LineFieldsProps): ReactElement => (
+  <>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <TextField
+        ref={categoryRef}
+        id={`${id}-category`}
+        label="Category"
+        required
+        maxLength={LIMITS.shortText}
+        value={draft.category}
+        onChange={(event) => {
+          update({ category: event.target.value });
+        }}
+        {...(errors.category ? { error: errors.category } : {})}
+      />
+      <TextField
+        ref={amountRef}
+        id={`${id}-amount`}
+        label={`Amount (${currency})`}
+        type="number"
+        inputMode="decimal"
+        min={0}
+        max={LIMITS.maxBudget}
+        step={1}
+        value={draft.amount}
+        onChange={(event) => {
+          update({ amount: event.target.value });
+        }}
+        {...(errors.amount ? { error: errors.amount } : {})}
+      />
+    </div>
+    <TextField
+      id={`${id}-rationale`}
+      label="Why it matters"
+      hint="Optional"
+      maxLength={LIMITS.mediumText}
+      value={draft.rationale}
+      onChange={(event) => {
+        update({ rationale: event.target.value });
+      }}
+    />
+  </>
+);
+
+type AddLineFormProps = AddLineOptions & { buttonRef: RefObject<HTMLButtonElement | null> };
+
+export const AddLineForm = ({ buttonRef, ...options }: AddLineFormProps): ReactElement => {
   const id = useId();
-  const { draft, error, update, submit } = useAddLineDraft(atMax, onAdd);
+  const { submit, ...fields } = useAddLineDraft(options);
   return (
     <form
       aria-labelledby={`${id}-title`}
@@ -102,43 +106,8 @@ export const AddLineForm = ({
       <h3 id={`${id}-title`} className="font-semibold">
         Add a budget line
       </h3>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          id={`${id}-category`}
-          label="Category"
-          required
-          maxLength={LIMITS.shortText}
-          value={draft.category}
-          onChange={(event) => {
-            update({ category: event.target.value });
-          }}
-          {...(error ? { error } : {})}
-        />
-        <TextField
-          id={`${id}-amount`}
-          label={`Amount (${currency})`}
-          type="number"
-          inputMode="decimal"
-          min={0}
-          max={LIMITS.maxBudget}
-          step={1}
-          value={draft.amount}
-          onChange={(event) => {
-            update({ amount: event.target.value });
-          }}
-        />
-      </div>
-      <TextField
-        id={`${id}-rationale`}
-        label="Why it matters"
-        hint="Optional"
-        maxLength={LIMITS.mediumText}
-        value={draft.rationale}
-        onChange={(event) => {
-          update({ rationale: event.target.value });
-        }}
-      />
-      <AddLineSubmit atMax={atMax} reasonId={`${id}-max`} buttonRef={buttonRef} />
+      <LineFields id={id} currency={options.currency} {...fields} />
+      <AddLineSubmit atMax={options.atMax} reasonId={`${id}-max`} buttonRef={buttonRef} />
     </form>
   );
 };

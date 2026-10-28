@@ -1,10 +1,23 @@
-import type { ReactElement } from "react";
+"use client";
 
+import type { ComponentType, ReactElement } from "react";
+
+import { downloadFile } from "@/components/summary/downloadFile";
 import { ResetControl } from "@/components/summary/ResetControl";
-import { downloadJson } from "@/components/summary/downloadJson";
 import { Button } from "@/components/ui/Button";
-import { DownloadIcon, PrinterIcon } from "@/components/ui/Icons";
+import { CalendarIcon, DownloadIcon, PrinterIcon, WalletIcon } from "@/components/ui/Icons";
+import { budgetCsvFile, calendarFile, planJsonFile, type ExportFile } from "@/lib/export";
 import type { StoredWorkspace } from "@/lib/schema";
+
+const EXPORTS = [
+  { label: "Export JSON", Icon: DownloadIcon, build: planJsonFile },
+  { label: "Download calendar (.ics)", Icon: CalendarIcon, build: calendarFile },
+  { label: "Download budget (CSV)", Icon: WalletIcon, build: budgetCsvFile },
+] as const satisfies ReadonlyArray<{
+  label: string;
+  Icon: ComponentType;
+  build: (workspace: StoredWorkspace) => ExportFile;
+}>;
 
 export const SummaryActions = ({
   workspace,
@@ -23,15 +36,18 @@ export const SummaryActions = ({
       <PrinterIcon />
       Print
     </Button>
-    <Button
-      variant="secondary"
-      onClick={() => {
-        downloadJson(workspace);
-      }}
-    >
-      <DownloadIcon />
-      Export JSON
-    </Button>
+    {EXPORTS.map(({ label, Icon, build }) => (
+      <Button
+        key={label}
+        variant="secondary"
+        onClick={() => {
+          downloadFile(build(workspace));
+        }}
+      >
+        <Icon />
+        {label}
+      </Button>
+    ))}
     <ResetControl onReset={onReset} />
   </div>
 );

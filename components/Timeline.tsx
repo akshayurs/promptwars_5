@@ -1,9 +1,8 @@
-"use client";
+import { useId, type ReactElement } from "react";
 
-import type { ReactElement } from "react";
-
-import { MilestoneItem, type Toggle } from "@/components/timeline/MilestoneItem";
+import { MilestoneItem } from "@/components/timeline/MilestoneItem";
 import { EYEBROW, SECTION_HEADING } from "@/components/ui/styles";
+import type { Toggle } from "@/components/workspace/types";
 import { formatDate } from "@/lib/format";
 import { groupMilestonesByPhase, milestoneProgress } from "@/lib/milestones";
 import type { Milestone } from "@/lib/schema";
@@ -12,7 +11,7 @@ import type { Phase } from "@/lib/types";
 export type TimelineProps = {
   timeline: readonly Milestone[];
   eventDate: string;
-  onToggle?: (id: string) => void;
+  onToggle?: Toggle;
 };
 
 const PHASE_LABELS: Record<Phase, string> = {
@@ -26,7 +25,7 @@ type PhaseGroupProps = {
   phase: Phase;
   milestones: readonly Milestone[];
   eventDate: string;
-  onToggle: Toggle;
+  onToggle: Toggle | undefined;
 };
 
 const PhaseGroup = ({ phase, milestones, eventDate, onToggle }: PhaseGroupProps): ReactElement => (
@@ -50,17 +49,18 @@ const PhaseGroup = ({ phase, milestones, eventDate, onToggle }: PhaseGroupProps)
 
 export const Timeline = ({ timeline, eventDate, onToggle }: TimelineProps): ReactElement => {
   const progress = milestoneProgress(timeline);
+  const id = useId();
   return (
-    <section aria-labelledby="timeline-heading" className="flex flex-col gap-6">
+    <section aria-labelledby={`${id}-heading`} className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <h2 id="timeline-heading" className={SECTION_HEADING}>
+        <h2 id={`${id}-heading`} className={SECTION_HEADING}>
           Timeline to {formatDate(eventDate)}
         </h2>
-        <p id="timeline-progress" role="status" className="text-sm font-medium text-ink-muted">
+        <p id={`${id}-progress`} role="status" className="text-sm font-medium text-ink-muted">
           {progress.done} of {progress.total} milestones done
         </p>
         <progress
-          aria-labelledby="timeline-progress"
+          aria-labelledby={`${id}-progress`}
           value={progress.done}
           max={Math.max(progress.total, 1)}
         />

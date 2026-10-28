@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect } from "react";
 
 /** Opens every <details> for printing and restores their state afterwards. */

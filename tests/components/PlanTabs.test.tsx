@@ -4,8 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { PlanTabs } from "@/components/workspace/PlanTabs";
 
 import { makeWorkspace } from "./fixtures";
+import { preloadLazyChunks } from "./lazy";
 
-const setup = () => {
+const setup = async () => {
   const base = makeWorkspace();
   const budget = [
     ...base.plan.budget,
@@ -14,19 +15,22 @@ const setup = () => {
   const workspace = { ...base, plan: { ...base.plan, budget } };
   const dispatch = vi.fn();
   render(<PlanTabs workspace={workspace} dispatch={dispatch} />);
+  await screen.findByRole("button", { name: "Add line" });
   return { workspace, dispatch, user: userEvent.setup() };
 };
 
 describe("PlanTabs", () => {
+  beforeAll(preloadLazyChunks);
+
   it("shows the budget tab first and switches panels", async () => {
-    const { user } = setup();
+    const { user } = await setup();
     expect(screen.getByRole("tab", { name: "Budget" })).toHaveAttribute("aria-selected", "true");
     await user.click(screen.getByRole("tab", { name: "Ideas" }));
     expect(screen.getByRole("tabpanel")).toHaveTextContent("Marigold arch");
   });
 
   it("dispatches budget edits: amount, total, add and remove", async () => {
-    const { workspace, dispatch, user } = setup();
+    const { workspace, dispatch, user } = await setup();
     const [first] = workspace.plan.budget;
     fireEvent.change(screen.getByLabelText("Venue amount (INR)"), { target: { value: "210000" } });
     expect(dispatch).toHaveBeenLastCalledWith({ type: "setAmount", id: first!.id, amount: 210000 });
@@ -49,9 +53,9 @@ describe("PlanTabs", () => {
   });
 
   it("dispatches milestone toggles from the timeline tab", async () => {
-    const { workspace, dispatch, user } = setup();
+    const { workspace, dispatch, user } = await setup();
     await user.click(screen.getByRole("tab", { name: "Timeline" }));
-    await user.click(screen.getByRole("checkbox", { name: /Set the guest list/ }));
+    await user.click(await screen.findByRole("checkbox", { name: /Set the guest list/ }));
     expect(dispatch).toHaveBeenCalledExactlyOnceWith({
       type: "toggleMilestone",
       id: workspace.plan.timeline[0]!.id,
@@ -59,9 +63,9 @@ describe("PlanTabs", () => {
   });
 
   it("dispatches vendor toggles from the vendors tab", async () => {
-    const { workspace, dispatch, user } = setup();
+    const { workspace, dispatch, user } = await setup();
     await user.click(screen.getByRole("tab", { name: "Vendors" }));
-    await user.click(screen.getByRole("checkbox", { name: "Photographer" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Photographer" }));
     expect(dispatch).toHaveBeenCalledExactlyOnceWith({
       type: "toggleVendor",
       id: workspace.plan.vendors[1]!.id,

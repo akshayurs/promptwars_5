@@ -129,3 +129,9 @@ export const TrashIcon = ({ className }: IconProps): ReactElement => (
     <path d="M4.5 7h15M10 11v6M14 11v6M6 7l1 12.5h10L18 7M9.5 7V4.5h5V7" />
   </Svg>
 );
+
+export const PencilIcon = ({ className }: IconProps): ReactElement => (
+  <Svg className={className}>
+    <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
+  </Svg>
+);

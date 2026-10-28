@@ -6,8 +6,8 @@ import { IdeasList } from "@/components/IdeasList";
 import { BulbIcon, CalendarIcon, ChecklistIcon, WalletIcon } from "@/components/ui/Icons";
 import { Timeline } from "@/components/Timeline";
 import { VendorChecklist } from "@/components/VendorChecklist";
+import type { Dispatch } from "@/components/workspace/types";
 import type { StoredWorkspace } from "@/lib/schema";
-import type { WorkspaceAction } from "@/lib/workspace";
 
 const TABS = [
   { value: "budget", label: "Budget", Icon: WalletIcon },
@@ -20,8 +20,6 @@ const TRIGGER =
   "-mb-px flex min-h-11 flex-1 items-center justify-center gap-2 border-b-2 border-transparent px-2 py-2 text-sm font-medium text-ink-muted transition-colors hover:border-control hover:text-ink sm:flex-none sm:px-4 data-[state=active]:border-brand data-[state=active]:font-semibold data-[state=active]:text-ink";
 
 const PANEL = "rounded-lg focus-visible:outline-offset-4";
-
-type Dispatch = (action: WorkspaceAction) => void;
 
 const budgetHandlers = (
   dispatch: Dispatch,
@@ -47,7 +45,7 @@ export const PlanTabs = ({
   dispatch,
 }: {
   workspace: StoredWorkspace;
-  dispatch: (action: WorkspaceAction) => void;
+  dispatch: Dispatch;
 }): ReactElement => {
   const { intake, plan } = workspace;
   return (

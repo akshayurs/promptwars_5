@@ -1,3 +1,5 @@
+"use client";
+
 import type { ComponentPropsWithRef, MouseEvent, ReactElement } from "react";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";

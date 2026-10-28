@@ -1,6 +1,4 @@
-"use client";
-
-import type { ReactElement } from "react";
+import { useId, type ReactElement } from "react";
 
 import {
   milestoneDate,
@@ -45,17 +43,15 @@ const NextMilestone = ({
 
 export const NextUpCard = ({ timeline, eventDate }: NextUpCardProps): ReactElement => {
   const next = nextMilestone(timeline);
+  const headingId = useId();
   return (
     <section
-      aria-labelledby="next-up-heading"
+      aria-labelledby={headingId}
       className={`${CARD} flex gap-4 border-l-4 border-l-brand p-5`}
     >
       <IconBadge>{next ? <ArrowRightIcon /> : <CheckIcon />}</IconBadge>
       <div className="flex min-w-0 flex-col gap-2">
-        <h2
-          id="next-up-heading"
-          className="text-xs font-semibold tracking-wider text-brand uppercase"
-        >
+        <h2 id={headingId} className="text-xs font-semibold tracking-wider text-brand uppercase">
           Next up
         </h2>
         {next ? (

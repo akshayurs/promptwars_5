@@ -1,5 +1,5 @@
 import type {
-  InputHTMLAttributes,
+  ComponentPropsWithRef,
   ReactElement,
   ReactNode,
   SelectHTMLAttributes,
@@ -51,7 +51,7 @@ export const TextField = ({
   hint,
   error,
   ...input
-}: Meta & InputHTMLAttributes<HTMLInputElement>): ReactElement => (
+}: Meta & ComponentPropsWithRef<"input">): ReactElement => (
   <FieldShell id={id} label={label} {...(hint ? { hint } : {})} {...(error ? { error } : {})}>
     {(describedBy, invalid) => (
       <input

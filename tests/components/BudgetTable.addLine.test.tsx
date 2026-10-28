@@ -1,23 +1,29 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { AddLineForm } from "@/components/budget/AddLineForm";
 import { BudgetTable } from "@/components/BudgetTable";
 import { LIMITS } from "@/lib/constants";
+import { formatMoney } from "@/lib/format";
 import type { BudgetLine } from "@/lib/schema";
 
 import { budgetLines as lines, extraLines, StatefulTable, UUID } from "./budgetTableHelpers";
+import { preloadLazyChunks } from "./lazy";
 
 describe("BudgetTable (add line)", () => {
-  const renderAdd = (current: readonly BudgetLine[] = lines) => {
+  beforeAll(preloadLazyChunks);
+
+  const renderAdd = async (current: readonly BudgetLine[] = lines) => {
     const onAddLine = vi.fn();
     render(
       <BudgetTable lines={current} totalBudget={500_000} currency="INR" onAddLine={onAddLine} />,
     );
+    await screen.findByRole("button", { name: "Add line" });
     return { onAddLine };
   };
 
   it("shows a validation error for an empty category", async () => {
-    const { onAddLine } = renderAdd();
+    const { onAddLine } = await renderAdd();
     await userEvent.click(screen.getByRole("button", { name: "Add line" }));
     expect(onAddLine).not.toHaveBeenCalled();
     const category = screen.getByRole("textbox", { name: "Category" });
@@ -27,14 +33,14 @@ describe("BudgetTable (add line)", () => {
   });
 
   it("treats a whitespace-only category as empty", async () => {
-    const { onAddLine } = renderAdd();
+    const { onAddLine } = await renderAdd();
     await userEvent.type(screen.getByRole("textbox", { name: "Category" }), "   ");
     await userEvent.click(screen.getByRole("button", { name: "Add line" }));
     expect(onAddLine).not.toHaveBeenCalled();
   });
 
   it("calls onAddLine with a uuid, sanitized amount and default rationale, then clears", async () => {
-    const { onAddLine } = renderAdd();
+    const { onAddLine } = await renderAdd();
     await userEvent.type(screen.getByRole("textbox", { name: "Category" }), "  Music  ");
     const amount = screen.getByRole("spinbutton", { name: "Amount (INR)" });
     expect(amount).toHaveValue(0);
@@ -52,12 +58,9 @@ describe("BudgetTable (add line)", () => {
     expect(amount).toHaveValue(0);
   });
 
-  it("keeps a provided rationale and clamps negative amounts to 0", async () => {
-    const { onAddLine } = renderAdd();
+  it("keeps a provided rationale", async () => {
+    const { onAddLine } = await renderAdd();
     await userEvent.type(screen.getByRole("textbox", { name: "Category" }), "Cake");
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Amount (INR)" }), {
-      target: { value: "-20" },
-    });
     await userEvent.type(screen.getByRole("textbox", { name: /Why it matters/ }), "Birthday cake");
     await userEvent.click(screen.getByRole("button", { name: "Add line" }));
     expect(onAddLine).toHaveBeenCalledWith(
@@ -66,8 +69,47 @@ describe("BudgetTable (add line)", () => {
     expect(screen.getByRole("textbox", { name: /Why it matters/ })).toHaveValue("");
   });
 
-  it("enforces input length limits", () => {
-    renderAdd();
+  it.each(["-20", "1000000001"])(
+    "rejects an out-of-range amount of %s and focuses the amount field",
+    async (value) => {
+      const { onAddLine } = await renderAdd();
+      await userEvent.type(screen.getByRole("textbox", { name: "Category" }), "Cake");
+      const amount = screen.getByRole("spinbutton", { name: "Amount (INR)" });
+      fireEvent.change(amount, { target: { value } });
+      await userEvent.click(screen.getByRole("button", { name: "Add line" }));
+      expect(onAddLine).not.toHaveBeenCalled();
+      expect(amount).toHaveAttribute("aria-invalid", "true");
+      expect(amount).toHaveAccessibleDescription(
+        `Enter an amount from ${formatMoney(0, "INR")} to ${formatMoney(LIMITS.maxBudget, "INR")}.`,
+      );
+      expect(amount).toHaveFocus();
+      expect(screen.getByRole("textbox", { name: "Category" })).not.toHaveAttribute("aria-invalid");
+    },
+  );
+
+  it("uses the injected id factory for new lines", async () => {
+    const onAdd = vi.fn();
+    render(
+      <AddLineForm
+        atMax={false}
+        currency="USD"
+        buttonRef={{ current: null }}
+        onAdd={onAdd}
+        createId={() => "line-1"}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "Category" }), "Music");
+    await userEvent.click(screen.getByRole("button", { name: "Add line" }));
+    expect(onAdd).toHaveBeenCalledExactlyOnceWith({
+      id: "line-1",
+      category: "Music",
+      amount: 0,
+      rationale: "Added by you",
+    });
+  });
+
+  it("enforces input length limits", async () => {
+    await renderAdd();
     expect(screen.getByRole("textbox", { name: "Category" })).toHaveAttribute(
       "maxLength",
       String(LIMITS.shortText),
@@ -80,7 +122,7 @@ describe("BudgetTable (add line)", () => {
 
   it("is aria-disabled with a reason at the maximum", async () => {
     const full = [...lines, ...extraLines(LIMITS.budgetLines.max - lines.length)];
-    const { onAddLine } = renderAdd(full);
+    const { onAddLine } = await renderAdd(full);
     const button = screen.getByRole("button", { name: "Add line" });
     expect(button).toHaveAttribute("aria-disabled", "true");
     expect(button).toHaveAccessibleDescription(
@@ -93,7 +135,7 @@ describe("BudgetTable (add line)", () => {
 
   it("moves focus to the new row's amount input", async () => {
     render(<StatefulTable initial={lines} />);
-    await userEvent.type(screen.getByRole("textbox", { name: "Category" }), "Music");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Category" }), "Music");
     await userEvent.click(screen.getByRole("button", { name: "Add line" }));
     const input = screen.getByRole("spinbutton", { name: "Music amount (INR)" });
     expect(input).toHaveFocus();

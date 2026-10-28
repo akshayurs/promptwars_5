@@ -1,19 +1,11 @@
-import type { StoredWorkspace } from "@/lib/schema";
+import type { ExportFile } from "@/lib/export";
 
-const exportFileName = (eventName: string): string =>
-  `${
-    eventName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "event"
-  }-plan.json`;
-
-export const downloadJson = (workspace: StoredWorkspace): void => {
-  const blob = new Blob([JSON.stringify(workspace, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+/** Saves a file through a temporary Blob URL that is revoked once the download has started. */
+export const downloadFile = ({ content, fileName, type }: ExportFile): void => {
+  const url = URL.createObjectURL(new Blob([content], { type }));
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = exportFileName(workspace.intake.eventName);
+  anchor.download = fileName;
   anchor.click();
   // Revoking synchronously can cancel the download in some browsers.
   setTimeout(() => {

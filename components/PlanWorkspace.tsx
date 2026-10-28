@@ -1,25 +1,35 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { ReactElement } from "react";
 
-import { NextUpCard } from "@/components/NextUpCard";
-import { RefinePanel } from "@/components/RefinePanel";
-import { useWorkspace } from "@/components/useWorkspace";
 import { EventFacts } from "@/components/EventFacts";
-import { ArrowRightIcon } from "@/components/ui/Icons";
+import { NextUpCard } from "@/components/NextUpCard";
+import { ArrowRightIcon, PencilIcon } from "@/components/ui/Icons";
+import { LazyFallback } from "@/components/ui/LazyFallback";
 import { PAGE_TITLE, TEXT_LINK } from "@/components/ui/styles";
-import { EmptyWorkspace, LoadingNotice, useHeadingFocus } from "@/components/WorkspaceStates";
+import { useHeadingFocus } from "@/components/useHeadingFocus";
+import { useWorkspace } from "@/components/useWorkspace";
 import { PlanTabs } from "@/components/workspace/PlanTabs";
+import type { Dispatch } from "@/components/workspace/types";
+import { EmptyWorkspace, LoadingNotice } from "@/components/WorkspaceStates";
 import type { StoredWorkspace } from "@/lib/schema";
-import type { WorkspaceAction } from "@/lib/workspace";
+
+// Below the tabs and only needed once the plan is on screen, so it loads in its own chunk.
+const RefinePanel = dynamic(
+  () => import("@/components/RefinePanel").then((mod) => mod.RefinePanel),
+  { loading: () => <LazyFallback label="refine panel" className="h-80" /> },
+);
+
+const HEADER_LINK = `${TEXT_LINK} flex min-h-11 w-fit items-center gap-1.5 text-sm`;
 
 const LoadedWorkspace = ({
   workspace,
   dispatch,
 }: {
   workspace: StoredWorkspace;
-  dispatch: (action: WorkspaceAction) => void;
+  dispatch: Dispatch;
 }): ReactElement => {
   const headingRef = useHeadingFocus();
   return (
@@ -31,14 +41,17 @@ const LoadedWorkspace = ({
         <p className="max-w-3xl text-lg leading-relaxed text-pretty text-ink-muted">
           {workspace.plan.summary}
         </p>
-        <EventFacts workspace={workspace} />
-        <Link
-          href="/plan/summary"
-          className={`${TEXT_LINK} flex min-h-11 w-fit items-center gap-1.5 text-sm`}
-        >
-          Open printable summary
-          <ArrowRightIcon />
-        </Link>
+        <EventFacts intake={workspace.intake} />
+        <div className="flex flex-wrap gap-x-6">
+          <Link href="/plan/summary" className={HEADER_LINK}>
+            Open printable summary
+            <ArrowRightIcon />
+          </Link>
+          <Link href="/plan/edit" className={HEADER_LINK}>
+            <PencilIcon />
+            Edit event details
+          </Link>
+        </div>
       </header>
       <NextUpCard timeline={workspace.plan.timeline} eventDate={workspace.intake.eventDate} />
       <PlanTabs workspace={workspace} dispatch={dispatch} />

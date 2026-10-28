@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/format";
 import type { Milestone } from "@/lib/schema";
 
 import { makePlan } from "./fixtures";
+import { preloadLazyChunks } from "./lazy";
 
 const EVENT_DATE = "2030-06-15";
 
@@ -118,13 +119,15 @@ describe("Timeline", () => {
 });
 
 describe("Timeline interactive mode", () => {
-  it("renders a checkbox per milestone labelled by its title and described by its date", () => {
+  beforeAll(preloadLazyChunks);
+
+  it("renders a checkbox per milestone labelled by its title and described by its date", async () => {
     const timeline = [
       milestone({ title: "Book venue", daysBeforeEvent: 30, done: true }),
       milestone({ title: "Send invites", daysBeforeEvent: 20 }),
     ];
     render(<Timeline timeline={timeline} eventDate={EVENT_DATE} onToggle={vi.fn()} />);
-    const booked = screen.getByRole("checkbox", { name: "Book venue" });
+    const booked = await screen.findByRole("checkbox", { name: "Book venue" });
     expect(booked).toHaveAttribute("aria-checked", "true");
     expect(booked).toHaveAccessibleDescription(
       `${formatDate(shiftDate(EVENT_DATE, -30))} · 30 days before`,
@@ -139,22 +142,23 @@ describe("Timeline interactive mode", () => {
     const onToggle = vi.fn();
     const target = milestone({ title: "Hire DJ" });
     render(<Timeline timeline={[target]} eventDate={EVENT_DATE} onToggle={onToggle} />);
-    await userEvent.click(screen.getByRole("checkbox", { name: "Hire DJ" }));
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Hire DJ" }));
     expect(onToggle).toHaveBeenCalledExactlyOnceWith(target.id);
   });
 
-  it("shows visible Done text for completed milestones only", () => {
+  it("shows visible Done text for completed milestones only", async () => {
     const timeline = [
       milestone({ title: "Finished", daysBeforeEvent: 40, done: true }),
       milestone({ title: "Pending", daysBeforeEvent: 30 }),
     ];
     render(<Timeline timeline={timeline} eventDate={EVENT_DATE} onToggle={vi.fn()} />);
+    await screen.findAllByRole("checkbox");
     const [finished, pending] = screen.getAllByRole("listitem");
     expect(within(finished!).getByText("Done")).toBeVisible();
     expect(within(pending!).queryByText("Done")).not.toBeInTheDocument();
   });
 
-  it("flags open milestones as Overdue or Due this week relative to today", () => {
+  it("flags open milestones as Overdue or Due this week relative to today", async () => {
     const eventDate = shiftDate(todayIso(), 10);
     const timeline = [
       milestone({ title: "Late", daysBeforeEvent: 12 }),
@@ -164,6 +168,7 @@ describe("Timeline interactive mode", () => {
       milestone({ title: "Later", daysBeforeEvent: 2 }),
     ];
     render(<Timeline timeline={timeline} eventDate={eventDate} onToggle={vi.fn()} />);
+    await screen.findAllByRole("checkbox");
     const item = (title: string) =>
       screen.getByRole("checkbox", { name: title }).closest("li") as HTMLElement;
     expect(item("Late")).toHaveTextContent("Overdue");
@@ -186,5 +191,19 @@ describe("Timeline read-only mode", () => {
     expect(screen.getByText("(done)")).toHaveClass("sr-only");
     expect(screen.getByText("(open)")).toHaveClass("sr-only");
     expect(screen.getByText("Done")).toBeInTheDocument();
+  });
+
+  it("gives each rendered timeline its own heading and progress ids", () => {
+    render(
+      <>
+        <Timeline timeline={[milestone({})]} eventDate={EVENT_DATE} />
+        <Timeline timeline={[milestone({ done: true })]} eventDate={EVENT_DATE} />
+      </>,
+    );
+    const [first, second] = screen.getAllByRole("region");
+    expect(first).toHaveAccessibleName(`Timeline to ${formatDate(EVENT_DATE)}`);
+    expect(second).toHaveAccessibleName(`Timeline to ${formatDate(EVENT_DATE)}`);
+    expect(screen.getByRole("progressbar", { name: "0 of 1 milestones done" })).toBeVisible();
+    expect(screen.getByRole("progressbar", { name: "1 of 1 milestones done" })).toBeVisible();
   });
 });

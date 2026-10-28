@@ -8,6 +8,7 @@ import { formatMoney } from "@/lib/format";
 import { workspaceStore } from "@/lib/workspaceStore";
 
 import { makeIntake, makeWorkspace, readStoredWorkspace } from "./fixtures";
+import { flushIdleCallbacks, preloadLazyChunks } from "./lazy";
 
 const localDatePlus = (days: number): string => {
   const date = new Date();
@@ -19,15 +20,25 @@ vi.mock("@/lib/client", () => ({ requestRefinement: vi.fn() }));
 
 const mockedRefine = vi.mocked(requestRefinement);
 
+// The refine panel and the add-line form load in their own chunks; wait for both.
+const renderWorkspace = async (): Promise<void> => {
+  render(<PlanWorkspace />);
+  await screen.findByRole("heading", { name: "Refine with AI" });
+  await screen.findByRole("button", { name: "Add line" });
+  await flushIdleCallbacks();
+};
+
 describe("PlanWorkspace", () => {
+  beforeAll(preloadLazyChunks);
+
   beforeEach(() => {
     mockedRefine.mockReset();
     workspaceStore.dispatch({ type: "replace", workspace: makeWorkspace() });
   });
 
-  it("renders the event name, summary and facts", () => {
+  it("renders the event name, summary and facts", async () => {
     const workspace = workspaceStore.getSnapshot().workspace!;
-    render(<PlanWorkspace />);
+    await renderWorkspace();
     expect(screen.getByRole("heading", { level: 1, name: "Asha & Ravi Wedding" })).toBeVisible();
     expect(screen.getByText(workspace.plan.summary)).toBeVisible();
     expect(screen.getByText("Date", { selector: "dt" }).nextElementSibling).toHaveTextContent(
@@ -46,10 +57,15 @@ describe("PlanWorkspace", () => {
       "href",
       "/plan/summary",
     );
+    const header = screen.getByRole("heading", { level: 1 }).closest("header")!;
+    expect(within(header).getByRole("link", { name: "Edit event details" })).toHaveAttribute(
+      "href",
+      "/plan/edit",
+    );
   });
 
-  it("moves focus to the h1 on mount", () => {
-    render(<PlanWorkspace />);
+  it("moves focus to the h1 on mount", async () => {
+    await renderWorkspace();
     const heading = screen.getByRole("heading", { level: 1 });
     expect(heading).toHaveAttribute("tabindex", "-1");
     expect(heading).toHaveFocus();
@@ -59,30 +75,30 @@ describe("PlanWorkspace", () => {
     [0, "(today)"],
     [1, "(tomorrow)"],
     [5, "(5 days away)"],
-  ])("shows a countdown for %i days", (days, label) => {
+  ])("shows a countdown for %i days", async (days, label) => {
     workspaceStore.dispatch({
       type: "replace",
       workspace: makeWorkspace({ intake: makeIntake({ eventDate: localDatePlus(days) }) }),
     });
-    render(<PlanWorkspace />);
+    await renderWorkspace();
     expect(screen.getByText("Date", { selector: "dt" }).nextElementSibling).toHaveTextContent(
       label,
     );
   });
 
-  it("shows no countdown for past dates", () => {
+  it("shows no countdown for past dates", async () => {
     workspaceStore.dispatch({
       type: "replace",
       workspace: makeWorkspace({ intake: makeIntake({ eventDate: localDatePlus(-3) }) }),
     });
-    render(<PlanWorkspace />);
+    await renderWorkspace();
     expect(screen.getByText("Date", { selector: "dt" }).nextElementSibling).not.toHaveTextContent(
       "(",
     );
   });
 
-  it("renders a labelled tablist with the budget panel active by default", () => {
-    render(<PlanWorkspace />);
+  it("renders a labelled tablist with the budget panel active by default", async () => {
+    await renderWorkspace();
     const tablist = screen.getByRole("tablist", { name: "Plan sections" });
     expect(
       within(tablist)
@@ -97,7 +113,7 @@ describe("PlanWorkspace", () => {
 
   it("switches panels by click", async () => {
     const user = userEvent.setup();
-    render(<PlanWorkspace />);
+    await renderWorkspace();
     await user.click(screen.getByRole("tab", { name: "Timeline" }));
     expect(screen.getByRole("heading", { name: /^Timeline to / })).toBeVisible();
     await user.click(screen.getByRole("tab", { name: "Vendors" }));
@@ -110,7 +126,7 @@ describe("PlanWorkspace", () => {
 
   it("switches panels with arrow keys", async () => {
     const user = userEvent.setup();
-    render(<PlanWorkspace />);
+    await renderWorkspace();
     screen.getByRole("tab", { name: "Budget" }).focus();
     await user.keyboard("{ArrowRight}");
     expect(screen.getByRole("tab", { name: "Timeline" })).toHaveAttribute("aria-selected", "true");
@@ -124,28 +140,30 @@ describe("PlanWorkspace", () => {
     expect(screen.getByRole("tab", { name: "Ideas" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("updates the allocated total and persists a budget edit", () => {
-    render(<PlanWorkspace />);
+  it("updates the allocated total at once and persists a budget edit after a pause", async () => {
+    await renderWorkspace();
     expect(screen.getAllByText(formatMoney(400_000, "INR")).length).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText("Venue amount (INR)"), { target: { value: "100000" } });
     expect(screen.getByLabelText("Venue amount (INR)")).toHaveValue(100_000);
     expect(screen.getByRole("cell", { name: formatMoney(300_000, "INR") })).toBeVisible();
     expect(screen.getByText(`${formatMoney(200_000, "INR")} still unallocated.`)).toBeVisible();
+    expect(readStoredWorkspace()?.plan.budget[0]?.amount).toBe(200_000);
+    workspaceStore.flush();
     expect(readStoredWorkspace()?.plan.budget[0]?.amount).toBe(100_000);
   });
 
-  it("shows the over-budget warning after an edit", () => {
-    render(<PlanWorkspace />);
+  it("shows the over-budget warning after an edit", async () => {
+    await renderWorkspace();
     fireEvent.change(screen.getByLabelText("Venue amount (INR)"), { target: { value: "400000" } });
     expect(screen.getByText("Over budget")).toBeVisible();
   });
 
   it("toggles a vendor, updates progress and persists", async () => {
     const user = userEvent.setup();
-    render(<PlanWorkspace />);
+    await renderWorkspace();
     await user.click(screen.getByRole("tab", { name: "Vendors" }));
     expect(screen.getByText("0 of 3 vendors booked")).toBeVisible();
-    await user.click(screen.getByRole("checkbox", { name: "Caterer" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Caterer" }));
     expect(screen.getByText("1 of 3 vendors booked")).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Caterer/ })).toHaveAttribute(
       "aria-checked",
@@ -166,7 +184,7 @@ describe("PlanWorkspace", () => {
       ideas: current.plan.ideas.slice(0, 3).map((idea) => ({ ...idea, title: `${idea.title} v2` })),
     };
     mockedRefine.mockResolvedValueOnce({ ok: true, value: refined });
-    render(<PlanWorkspace />);
+    await renderWorkspace();
     expect(screen.getByRole("heading", { name: "Refine with AI" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Undo last refinement" })).toBeDisabled();
 
@@ -182,9 +200,10 @@ describe("PlanWorkspace", () => {
     expect(readStoredWorkspace()?.plan.summary).toBe(current.plan.summary);
   });
 
-  it("shows the empty workspace with a link home when nothing is stored", () => {
+  it("shows the empty workspace with a link home when nothing is stored", async () => {
     workspaceStore.dispatch({ type: "replace", workspace: null });
     render(<PlanWorkspace />);
+    await flushIdleCallbacks();
     expect(screen.getByRole("status")).toHaveTextContent("No plan yet");
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByRole("heading", { level: 1, name: "Workspace" })).toBeVisible();

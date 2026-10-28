@@ -8,8 +8,11 @@ import { LIMITS } from "@/lib/constants";
 import type { BudgetLine } from "@/lib/schema";
 
 import { budgetLines as lines, extraLines, StatefulTable } from "./budgetTableHelpers";
+import { preloadLazyChunks } from "./lazy";
 
 describe("BudgetTable (remove line)", () => {
+  beforeAll(preloadLazyChunks);
+
   const fourLines = [...lines, ...extraLines(1)];
 
   it("calls onRemoveLine with the line id", async () => {
@@ -50,9 +53,27 @@ describe("BudgetTable (remove line)", () => {
 
   it("moves focus to the Add line button after removal", async () => {
     render(<StatefulTable initial={fourLines} />);
+    const addButton = await screen.findByRole("button", { name: "Add line" });
     await userEvent.click(screen.getByRole("button", { name: "Remove Decor" }));
     expect(screen.queryByRole("button", { name: "Remove Decor" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add line" })).toHaveFocus();
+    expect(addButton).toHaveFocus();
+  });
+
+  it("announces each removal in a polite status region", async () => {
+    render(<StatefulTable initial={[...fourLines, ...extraLines(1)]} />);
+    await screen.findByRole("button", { name: "Add line" });
+    await userEvent.click(screen.getByRole("button", { name: "Remove Decor" }));
+    const status = screen.getByText("Removed Decor.");
+    expect(status).toHaveAttribute("role", "status");
+    expect(status).toHaveClass("sr-only");
+    await userEvent.click(screen.getByRole("button", { name: "Remove Venue" }));
+    expect(status).toHaveTextContent("Removed Venue.");
+  });
+
+  it("has no removal status region when lines cannot be removed", () => {
+    render(<BudgetTable lines={lines} totalBudget={500_000} currency="INR" />);
+    expect(screen.queryByText(/^Removed /)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
   });
 
   it("moves focus to the heading when there is no add form", async () => {

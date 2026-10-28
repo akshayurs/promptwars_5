@@ -4,11 +4,14 @@ import userEvent from "@testing-library/user-event";
 import { VendorChecklist } from "@/components/VendorChecklist";
 
 import { makePlan } from "./fixtures";
+import { preloadLazyChunks } from "./lazy";
 
 const makeVendors = (bookedIndexes: readonly number[] = []) =>
   makePlan().vendors.map((vendor, index) => ({ ...vendor, booked: bookedIndexes.includes(index) }));
 
 describe("VendorChecklist", () => {
+  beforeAll(preloadLazyChunks);
+
   it("shows progress text and a progress element", () => {
     render(<VendorChecklist vendors={makeVendors([0])} />);
     expect(screen.getByRole("status")).toHaveTextContent("1 of 3 vendors booked");
@@ -31,9 +34,9 @@ describe("VendorChecklist", () => {
     expect(screen.getByText("(booked)")).toHaveClass("sr-only");
   });
 
-  it("renders a checkbox labelled by category when interactive", () => {
+  it("renders a checkbox labelled by category when interactive", async () => {
     render(<VendorChecklist vendors={makeVendors()} onToggle={vi.fn()} />);
-    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(await screen.findAllByRole("checkbox")).toHaveLength(3);
     expect(screen.getByRole("checkbox", { name: "Caterer" })).toHaveAttribute(
       "aria-checked",
       "false",
@@ -45,7 +48,7 @@ describe("VendorChecklist", () => {
     const onToggle = vi.fn();
     const vendors = makeVendors();
     render(<VendorChecklist vendors={vendors} onToggle={onToggle} />);
-    await user.click(screen.getByRole("checkbox", { name: "Photographer" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Photographer" }));
     expect(onToggle).toHaveBeenCalledExactlyOnceWith(vendors[1]!.id);
   });
 
@@ -54,13 +57,14 @@ describe("VendorChecklist", () => {
     const onToggle = vi.fn();
     const vendors = makeVendors();
     render(<VendorChecklist vendors={vendors} onToggle={onToggle} />);
+    await screen.findAllByRole("checkbox");
     await user.click(screen.getByText("Florist"));
     expect(onToggle).toHaveBeenCalledExactlyOnceWith(vendors[2]!.id);
   });
 
-  it("marks booked vendors as checked without duplicate sr-only text", () => {
+  it("marks booked vendors as checked without duplicate sr-only text", async () => {
     render(<VendorChecklist vendors={makeVendors([0])} onToggle={vi.fn()} />);
-    const checkbox = screen.getByRole("checkbox", { name: "Caterer" });
+    const checkbox = await screen.findByRole("checkbox", { name: "Caterer" });
     expect(checkbox).toHaveAttribute("aria-checked", "true");
     expect(screen.queryByText(/booked\)/)).not.toBeInTheDocument();
   });
@@ -73,6 +77,31 @@ describe("VendorChecklist", () => {
     expect(within(first).getByText("Questions to ask")).toBeInTheDocument();
     expect(within(first).getByText("Do you cover dietary needs?")).toBeInTheDocument();
     expect(first.querySelectorAll("li")).toHaveLength(2);
+  });
+
+  it("names each questions disclosure after its vendor", () => {
+    const { container } = render(<VendorChecklist vendors={makeVendors()} />);
+    const names = [...container.querySelectorAll("summary")].map((summary) => summary.textContent);
+    expect(names).toEqual([
+      "Questions to ask: Caterer",
+      "Questions to ask: Photographer",
+      "Questions to ask: Florist",
+    ]);
+    expect(within(container.querySelector("summary")!).getByText(": Caterer")).toHaveClass(
+      "sr-only",
+    );
+  });
+
+  it("lists a question the model repeated only once", () => {
+    const [vendor] = makeVendors();
+    const repeated = {
+      ...vendor!,
+      questionsToAsk: ["Is a deposit needed?", "Is a deposit needed?"],
+    };
+    const { container } = render(<VendorChecklist vendors={[repeated]} />);
+    const items = container.querySelectorAll("details li");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveTextContent("Is a deposit needed?");
   });
 
   it("handles an empty vendor list", () => {

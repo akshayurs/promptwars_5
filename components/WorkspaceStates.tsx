@@ -1,17 +1,8 @@
 import Link from "next/link";
-import { useEffect, useRef, type ReactElement, type RefObject } from "react";
+import type { ReactElement } from "react";
 
 import { Alert } from "@/components/ui/Alert";
 import { PAGE_TITLE, TEXT_LINK } from "@/components/ui/styles";
-
-/** Moves focus to the page heading once on mount so route changes are announced. */
-export const useHeadingFocus = (): RefObject<HTMLHeadingElement | null> => {
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
-  return headingRef;
-};
 
 export const EmptyWorkspace = ({ title = "Workspace" }: { title?: string }): ReactElement => (
   <div className="mx-auto flex max-w-xl flex-col gap-5">

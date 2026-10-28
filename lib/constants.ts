@@ -29,6 +29,8 @@ export const LIMITS = {
   /** Fits a refine request at every schema maximum even when each character takes 3 UTF-8 bytes. */
   requestBodyBytes: 131_072,
   cspReportBodyBytes: 8_192,
+  /** An exported workspace holds two plans, so twice the request cap fits any valid file. */
+  importFileBytes: 262_144,
 } as const;
 
 export const API = {
@@ -61,3 +63,7 @@ export const MINOR_UNITS = 100;
 export const DUE_SOON_DAYS = 7;
 /** Delay before a pending generation or refinement announces that it is still running. */
 export const LONG_WAIT_NOTICE_MS = 10_000;
+/** Quiet period after the last keystroke-rate edit before the workspace is written to storage. */
+export const PERSIST_DEBOUNCE_MS = 300;
+/** RFC 5545 content lines longer than this many octets are folded. */
+export const ICS_MAX_LINE_OCTETS = 75;

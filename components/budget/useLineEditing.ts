@@ -1,4 +1,6 @@
-import { useEffect, useId, useRef, type RefObject } from "react";
+"use client";
+
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
 import { LIMITS } from "@/lib/constants";
 import type { BudgetLine } from "@/lib/schema";
@@ -10,9 +12,11 @@ type LineEditing = {
   addButtonRef: RefObject<HTMLButtonElement | null>;
   headingRef: RefObject<HTMLHeadingElement | null>;
   handleAdd: AddLine;
+  /** Polite status text confirming the last removal. */
+  announcement: string;
 };
 
-// Keeps keyboard focus on a stable control after rows are added or removed.
+// Keeps keyboard focus on a stable control after rows are added or removed, and confirms removals.
 export const useLineEditing = (
   lines: readonly BudgetLine[],
   onAddLine: AddLine | undefined,
@@ -22,6 +26,7 @@ export const useLineEditing = (
   const addButtonRef = useRef<HTMLButtonElement | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const pendingFocusId = useRef<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
 
   useEffect(() => {
     const id = pendingFocusId.current;
@@ -30,9 +35,10 @@ export const useLineEditing = (
     document.getElementById(amountInputId(id))?.focus();
   }, [lines]);
 
-  const handleRemove = (id: string): void => {
+  const handleRemove = (line: BudgetLine): void => {
     (addButtonRef.current ?? headingRef.current)?.focus();
-    onRemoveLine?.(id);
+    onRemoveLine?.(line.id);
+    setAnnouncement(`Removed ${line.category}.`);
   };
   const handleAdd = (line: BudgetLine): void => {
     pendingFocusId.current = line.id;
@@ -41,5 +47,5 @@ export const useLineEditing = (
   const remove = onRemoveLine
     ? { onRemove: handleRemove, disabled: lines.length <= LIMITS.budgetLines.min, reasonId }
     : null;
-  return { remove, addButtonRef, headingRef, handleAdd };
+  return { remove, addButtonRef, headingRef, handleAdd, announcement };
 };
