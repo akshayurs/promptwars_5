@@ -6,11 +6,11 @@ and `dom` (jsdom: `tests/components/**` plus the unit files that need a browser,
 `storage`, `workspaceStore` and `zod`). Every test must contain an assertion
 (`expect.requireAssertions`). End-to-end tests run in Playwright.
 
-| Layer             | Location                                                             | Environment                                      | What it covers                                                                                                                                                                                 |
-| ----------------- | -------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit              | [tests/unit/](../tests/unit)                                         | Vitest, `node` project                           | Pure logic in `lib/`: schemas, budget, milestone and vendor logic, plan merging, reducer, store, storage, limiter, prompts, Gemini wrapper, env, logger, HTTP and response helpers, `proxy.ts` |
-| Component and API | [tests/components/](../tests/components), [tests/api/](../tests/api) | `dom` project (components), `node` project (API) | React components with Testing Library and user-event; route handlers (plan, refine, CSP report) called with `Request` objects                                                                  |
-| End-to-end        | [tests/e2e/](../tests/e2e)                                           | Playwright, production build                     | Full flows, axe accessibility scans, security headers and API guards                                                                                                                           |
+| Layer             | Location                                                             | Environment                                      | What it covers                                                                                                                                                                                                                    |
+| ----------------- | -------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit              | [tests/unit/](../tests/unit)                                         | Vitest, `node` project                           | Pure logic in `lib/`: schemas, budget, milestone and vendor logic, plan merging, reducer, store, storage, limiter, prompts, Gemini wrapper, env, logger, HTTP and response helpers, `proxy.ts`, `instrumentation.ts`, `robots.ts` |
+| Component and API | [tests/components/](../tests/components), [tests/api/](../tests/api) | `dom` project (components), `node` project (API) | React components, every `app/` page, loading file, the root layout and the global error page with Testing Library and user-event; route handlers (plan, refine, CSP report) called with `Request` objects                         |
+| End-to-end        | [tests/e2e/](../tests/e2e)                                           | Playwright, production build                     | Full flows, axe accessibility scans, security headers and API guards                                                                                                                                                              |
 
 ## What is mocked
 
@@ -27,8 +27,12 @@ and `dom` (jsdom: `tests/components/**` plus the unit files that need a browser,
   stubs global `fetch`.
 - **Browser storage:** jsdom `localStorage` is cleared and Testing Library is cleaned up after each
   test in [tests/setup.ts](../tests/setup.ts).
-- **Time:** the `node` project also loads [tests/setup.clock.ts](../tests/setup.clock.ts), which
-  fixes `Date` to a constant instant; pure functions also take injectable clocks.
+- **Time and timezone:** both projects load [tests/setup.clock.ts](../tests/setup.clock.ts), which
+  fakes only `Date` and sets it to `FIXED_NOW` ([tests/unit/clock.ts](../tests/unit/clock.ts)) before
+  every test, so tests that call `vi.useFakeTimers()` themselves keep the same instant. Fixtures derive
+  dates from `FIXED_NOW` instead of reading the real clock, and pure functions also take injectable
+  clocks. Runs are pinned to `TZ=UTC` (`vitest.config.mts`, the `test*` npm scripts and Playwright's
+  `timezoneId`).
 - **E2E page guard:** [tests/e2e/fixtures.ts](../tests/e2e/fixtures.ts) fails every e2e test on a CSP
   violation (`securitypolicyviolation` event or console message), an uncaught page error, or a mocked
   API request body that does not match the shared request schemas.
@@ -40,8 +44,8 @@ and `dom` (jsdom: `tests/components/**` plus the unit files that need a browser,
 
 ## Coverage thresholds
 
-Configured in [vitest.config.mts](../vitest.config.mts) for `lib/**`, `components/**`,
-`app/api/**` and `proxy.ts` (v8 provider). All four metrics must be 100%:
+Configured in [vitest.config.mts](../vitest.config.mts) for `lib/**`, `components/**`, `app/**`,
+`proxy.ts` and `instrumentation.ts` (v8 provider). All four metrics must be 100%:
 
 | Metric     | Minimum |
 | ---------- | ------- |
@@ -83,17 +87,19 @@ false`), so port 3100 must be free.
   and 502 and 503 failures.
 - [eventTypes.spec.ts](../tests/e2e/eventTypes.spec.ts): birthday and community intake fields and
   generated plans.
+- [flows.spec.ts](../tests/e2e/flows.spec.ts): cancelling generation and refinement (the mocked
+  route is held on a promise the test releases), editing event details, the replace-plan
+  confirmation, importing a plan file (valid and invalid), the calendar and CSV downloads, and
+  budget amount validation.
 - [accessibility.spec.ts](../tests/e2e/accessibility.spec.ts): axe scans of the intake page (also
   with validation errors), every workspace tab, an over-budget workspace, the empty workspace, the
-  summary, the 404 page, refine success, error and validation states, and the intake, workspace
-  and summary pages in the dark colour scheme; one `h1` per page; skip link reached with `Tab` and
+  summary, the edit-details page, the 404 page, the replace-plan confirmation, an invalid import,
+  the cancelled notice, the start-over confirmation, refine success, error and validation states, and the intake, workspace
+  and summary pages in the dark colour scheme; one `h1` on the intake, workspace, edit, summary and 404 pages; skip link reached with `Tab` and
   activated with `Enter`.
 - [security.spec.ts](../tests/e2e/security.spec.ts): CSP nonce, hardened headers, and for both API
   routes 415, 400 (invalid JSON and schema-invalid), 413, 405 with `Allow: POST`, and cross-site
   403 responses.
-
-The e2e suite does not exercise cancelling a request, editing event details, importing a plan
-file or the calendar and CSV downloads.
 
 ## Writing tests
 

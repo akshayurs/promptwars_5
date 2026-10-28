@@ -28,7 +28,7 @@ Unit, component and e2e tests do not need a real key.
 | `npm run check`                   | lint, format, typecheck, test, knip and build in sequence                                                      |
 
 Run `npm run check` before opening a pull request. CI ([.github/workflows/ci.yml](.github/workflows/ci.yml))
-runs the same steps plus `npm audit --omit=dev --audit-level=high` and Playwright, and the
+runs the same steps plus `npm audit --omit=dev --audit-level=moderate` and Playwright, and the
 CodeQL, dependency review and secret scanning workflows also run on pull requests. See
 [docs/TESTING.md](docs/TESTING.md).
 
@@ -67,7 +67,7 @@ Enforced by [tsconfig.json](tsconfig.json), [eslint.config.mjs](eslint.config.mj
 - Explicit return types on exported functions; exhaustive `switch` statements.
 - Cognitive complexity at most 10, functions at most 60 lines, at most 3 parameters (pass an
   options object instead). Test files are exempt from the function-length and file-length rules.
-- Files at most 150 lines (test files exempt), braces on every `if`/`else` (`curly: all`), no nested ternaries, no `console` (use [lib/logger.ts](lib/logger.ts)), strict equality only.
+- Files at most 150 lines (test files exempt), braces on every `if`/`else` (`curly: all`, restored after `eslint-config-prettier`), no nested ternaries, no `console` (use [lib/logger.ts](lib/logger.ts)), strict equality only.
 - `jsx-a11y` strict rules and `next/core-web-vitals`.
 - Prettier: semicolons, double quotes, trailing commas, 100 column width. See
   [.editorconfig](.editorconfig).

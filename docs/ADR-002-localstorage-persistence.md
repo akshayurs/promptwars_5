@@ -14,15 +14,15 @@ add authentication, retention and privacy obligations that the product does not 
   key `eventcraft.plan.v2` (`STORAGE_KEY`, derived from `WORKSPACE_VERSION`) in `localStorage` ([lib/storage.ts](../lib/storage.ts),
   [lib/constants.ts](../lib/constants.ts)).
 - Validate on read with `StoredWorkspaceSchema`. Corrupt JSON or schema mismatches are removed and
-  treated as an empty workspace. Writes that throw (quota, private mode) return `false` and the
-  in-memory state still works.
+  treated as an empty workspace. Writes that throw (quota, private mode) return `false`, the
+  in-memory state still works, and the store sets `saveFailed` so the workspace shows an alert.
 - Hold state in a module-level store ([lib/workspaceStore.ts](../lib/workspaceStore.ts)) driven by
   a pure reducer ([lib/workspace.ts](../lib/workspace.ts)), exposed to React with
   `useSyncExternalStore` ([components/useWorkspace.ts](../components/useWorkspace.ts)). The server
   snapshot is `{ status: "loading" }`, so server and first client render match.
 - Writes for per-keystroke edits (`setAmount`, `setTotalBudget`) are debounced by
   `PERSIST_DEBOUNCE_MS` and flushed when the page is hidden or unloaded; all other changes are
-  written immediately ([lib/workspaceStore.ts](../lib/workspaceStore.ts)).
+  written immediately ([lib/workspaceStore.ts](../lib/workspaceStore.ts), [lib/workspacePersistence.ts](../lib/workspacePersistence.ts)).
 - Keep a single `previousPlan` to support one-level undo after a refinement.
 - The summary page can export the workspace as JSON as a user-controlled backup (it also offers a
   calendar and a budget CSV, which are not read back). The intake page

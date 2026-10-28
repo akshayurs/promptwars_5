@@ -6,31 +6,36 @@ and persists all plan state.
 
 ## Layout
 
-| Path                                                                                                                               | Responsibility                                                                                                                                                                                                                                                                      |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [app/](../app)                                                                                                                     | Routes: `/` intake and plan import, `/plan` workspace, `/plan/edit` edit event details, `/plan/summary`, `POST /api/plan`, `POST /api/refine`, `POST /api/csp-report`; `loading.tsx` for `/plan` and `/plan/summary`, `error.tsx`, `global-error.tsx`, `not-found.tsx`, `robots.ts` |
-| [components/](../components)                                                                                                       | Feature components; their parts live in `intake/`, `budget/`, `timeline/`, `workspace/`, `summary/`, `refine/`; [ui/](../components/ui) holds primitives, icons and shared styles                                                                                                   |
-| [lib/schema.ts](../lib/schema.ts), [lib/intakeSchema.ts](../lib/intakeSchema.ts), [lib/types.ts](../lib/types.ts)                  | Zod schemas and inferred types (single source of truth)                                                                                                                                                                                                                             |
-| [lib/generatedPlanSchema.ts](../lib/generatedPlanSchema.ts), [lib/geminiSchema.ts](../lib/geminiSchema.ts)                         | Server-only model contract: the described schema, the lenient parser for model output, and the JSON schema sent to Gemini with unsupported keywords stripped                                                                                                                        |
-| [lib/constants.ts](../lib/constants.ts)                                                                                            | Limits, API settings, storage key and version                                                                                                                                                                                                                                       |
-| [lib/gemini.ts](../lib/gemini.ts)                                                                                                  | `PlanGenerator`: Gemini call, JSON parsing, retry, error mapping                                                                                                                                                                                                                    |
-| [lib/prompts.ts](../lib/prompts.ts), [lib/promptBlocks.ts](../lib/promptBlocks.ts)                                                 | System and user prompt builders and the data blocks they embed                                                                                                                                                                                                                      |
-| [lib/plan.ts](../lib/plan.ts)                                                                                                      | Server-side plan rules: ids, budget fit, lead-time clamp, refine carry-over, diffs                                                                                                                                                                                                  |
-| [lib/budget.ts](../lib/budget.ts), [lib/milestones.ts](../lib/milestones.ts), [lib/vendors.ts](../lib/vendors.ts)                  | Pure budget, timeline and vendor logic used by the reducer and the UI                                                                                                                                                                                                               |
-| [lib/money.ts](../lib/money.ts), [lib/dates.ts](../lib/dates.ts), [lib/format.ts](../lib/format.ts), [lib/text.ts](../lib/text.ts) | Minor-unit rounding, calendar-day arithmetic with injectable clocks, display formatting, word-boundary truncation                                                                                                                                                                   |
-| [lib/api/](../lib/api)                                                                                                             | `createPlanRoute` pipeline, `createCspReportRoute`, response helpers and route dependencies                                                                                                                                                                                         |
-| [lib/http.ts](../lib/http.ts), [lib/rateLimit.ts](../lib/rateLimit.ts), [lib/logger.ts](../lib/logger.ts)                          | Body reading, client key and cross-site check, limiter, JSON-lines logs                                                                                                                                                                                                             |
-| [lib/workspace.ts](../lib/workspace.ts), [lib/workspaceStore.ts](../lib/workspaceStore.ts), [lib/storage.ts](../lib/storage.ts)    | Client state                                                                                                                                                                                                                                                                        |
-| [lib/export.ts](../lib/export.ts)                                                                                                  | Export files built from the workspace: JSON, an iCalendar file (RFC 5545, all-day entries for the event and each milestone) and a budget CSV (RFC 4180, formula-prefix defused, UTF-8 BOM)                                                                                          |
-| [lib/importWorkspace.ts](../lib/importWorkspace.ts), [lib/intakeEdit.ts](../lib/intakeEdit.ts)                                     | Validation of an exported plan file (size cap `LIMITS.importFileBytes`, then `StoredWorkspaceSchema`); the fixed instruction that turns edited event details into a refine request                                                                                                  |
-| [proxy.ts](../proxy.ts), [next.config.ts](../next.config.ts)                                                                       | CSP nonce and security headers                                                                                                                                                                                                                                                      |
-| [instrumentation.ts](../instrumentation.ts)                                                                                        | Validates `GEMINI_API_KEY` when the Node.js server starts; logs request errors by digest                                                                                                                                                                                            |
+| Path                                                                                                                                                   | Responsibility                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [app/](../app)                                                                                                                                         | Routes: `/` intake and plan import, `/plan` workspace, `/plan/edit` edit event details, `/plan/summary`, `POST /api/plan`, `POST /api/refine`, `POST /api/csp-report`; `loading.tsx` for `/plan` and `/plan/summary`, `error.tsx`, `global-error.tsx`, `not-found.tsx`, `robots.ts` |
+| [components/](../components)                                                                                                                           | Feature components; their parts live in `intake/`, `budget/`, `timeline/`, `workspace/`, `summary/`, `refine/`; [ui/](../components/ui) holds primitives, icons and shared styles                                                                                                   |
+| [lib/schema.ts](../lib/schema.ts), [lib/intakeSchema.ts](../lib/intakeSchema.ts), [lib/types.ts](../lib/types.ts)                                      | Zod schemas and inferred types (single source of truth)                                                                                                                                                                                                                             |
+| [lib/generatedPlanSchema.ts](../lib/generatedPlanSchema.ts), [lib/geminiSchema.ts](../lib/geminiSchema.ts)                                             | Server-only model contract: the described schema, the lenient parser for model output, and the JSON schema sent to Gemini with unsupported keywords stripped                                                                                                                        |
+| [lib/constants.ts](../lib/constants.ts)                                                                                                                | Limits, API settings, storage key and version                                                                                                                                                                                                                                       |
+| [lib/gemini.ts](../lib/gemini.ts)                                                                                                                      | `PlanGenerator`: Gemini call, JSON parsing, retry, error mapping                                                                                                                                                                                                                    |
+| [lib/geminiResponse.ts](../lib/geminiResponse.ts)                                                                                                      | `PlanGenerationError` and parsing of one model reply (empty, invalid JSON, schema mismatch, blocked or early stop)                                                                                                                                                                  |
+| [lib/prompts.ts](../lib/prompts.ts), [lib/promptBlocks.ts](../lib/promptBlocks.ts)                                                                     | System and user prompt builders and the data blocks they embed                                                                                                                                                                                                                      |
+| [lib/eventTypes.ts](../lib/eventTypes.ts), [lib/eventTypePrompts.ts](../lib/eventTypePrompts.ts)                                                       | Event-type registry (labels, icon, intake detail fields and their form mapping) and its server-only prompt guidance (`eventGuidance`, `eventDetailLines`); adding an event type starts here                                                                                         |
+| [lib/plan.ts](../lib/plan.ts)                                                                                                                          | Server-side plan rules: ids, budget fit, lead-time clamp, refine carry-over, diffs                                                                                                                                                                                                  |
+| [lib/budget.ts](../lib/budget.ts), [lib/milestones.ts](../lib/milestones.ts), [lib/vendors.ts](../lib/vendors.ts)                                      | Pure budget, timeline and vendor logic used by the reducer and the UI                                                                                                                                                                                                               |
+| [lib/money.ts](../lib/money.ts), [lib/dates.ts](../lib/dates.ts), [lib/format.ts](../lib/format.ts), [lib/text.ts](../lib/text.ts)                     | Minor-unit rounding, calendar-day arithmetic with injectable clocks, display formatting, word-boundary truncation                                                                                                                                                                   |
+| [lib/collections.ts](../lib/collections.ts), [lib/ids.ts](../lib/ids.ts), [lib/sanitize.ts](../lib/sanitize.ts), [lib/messages.ts](../lib/messages.ts) | `countBy`, `toggleById`, `progressOf`; the injectable id factory; control and bidi character stripping for user text; shared page titles (`PAGE_TITLES`) and the invalid-fields message                                                                                             |
+| [lib/api/](../lib/api)                                                                                                                                 | `createPlanRoute` pipeline, `createCspReportRoute`, response helpers and route dependencies                                                                                                                                                                                         |
+| [lib/http.ts](../lib/http.ts), [lib/rateLimit.ts](../lib/rateLimit.ts), [lib/logger.ts](../lib/logger.ts)                                              | Body reading, client key and cross-site check, limiter, JSON-lines logs                                                                                                                                                                                                             |
+| [lib/clientAddress.ts](../lib/clientAddress.ts), [lib/concurrencyLimit.ts](../lib/concurrencyLimit.ts)                                                 | Rate-limit key for an address (IPv6 by /64 prefix, IPv4-mapped as IPv4); per-client cap on running generations                                                                                                                                                                      |
+| [lib/workspace.ts](../lib/workspace.ts), [lib/workspaceStore.ts](../lib/workspaceStore.ts), [lib/storage.ts](../lib/storage.ts)                        | Client state                                                                                                                                                                                                                                                                        |
+| [lib/workspacePersistence.ts](../lib/workspacePersistence.ts)                                                                                          | Debounced and flushed storage writes for the store, reporting whether they succeeded                                                                                                                                                                                                |
+| [lib/export.ts](../lib/export.ts)                                                                                                                      | Export files built from the workspace: JSON, an iCalendar file (RFC 5545, all-day entries for the event and each milestone) and a budget CSV (RFC 4180, formula-prefix defused, UTF-8 BOM)                                                                                          |
+| [lib/importWorkspace.ts](../lib/importWorkspace.ts), [lib/intakeEdit.ts](../lib/intakeEdit.ts)                                                         | Validation of an exported plan file (size cap `LIMITS.importFileBytes`, then `StoredWorkspaceSchema`); the fixed instruction that turns edited event details into a refine request                                                                                                  |
+| [proxy.ts](../proxy.ts), [next.config.ts](../next.config.ts)                                                                                           | CSP nonce and security headers                                                                                                                                                                                                                                                      |
+| [instrumentation.ts](../instrumentation.ts)                                                                                                            | Validates `GEMINI_API_KEY` when the Node.js server starts; logs request errors by digest                                                                                                                                                                                            |
 
 ## Request flow (`POST /api/plan`, `POST /api/refine`)
 
 Both routes are built with `createPlanRoute` ([lib/api/planRoute.ts](../lib/api/planRoute.ts)); only
 the schema and `execute` function differ. Any other method on these routes (and on
-`/api/csp-report`) returns 405 with `Allow: POST` (`methodNotAllowed` in
+`/api/csp-report`), `OPTIONS` included, returns 405 with `Allow: POST` (`methodNotAllowed` in
 [lib/api/responses.ts](../lib/api/responses.ts)).
 
 ```
@@ -41,21 +46,25 @@ app/api/{plan|refine}/route.ts
   |
   1. correlationId = crypto.randomUUID()
   2. isCrossSiteRequest                  -> 403 (Sec-Fetch-Site not same-origin/none,
-                                                  or Origin host differs)
+                                                  or, without it, Origin differs from the
+                                                  public origin)
   3. limiter.consume(clientKey)          -> 429 + Retry-After (+ RateLimit headers on all
                                                   later responses)
   4. readJsonBody (131,072 byte cap)     -> 415 / 413 / 400 (invalid UTF-8 or JSON)
   5. schema.safeParse                    -> 400 + issues[]
         plan:   IntakeSchema
         refine: RefineRequestSchema (intake + plan + instruction)
-  6. signal = AbortSignal.any([timeout(45s), request.signal])
-  7. generator.generate | generator.refine
+  6. inFlight.acquire(clientKey)         -> 429 + Retry-After: 10 (2 running per client)
+  7. signal = AbortSignal.any([timeout(45s), request.signal])
+  8. generator.generate | generator.refine
         buildPlanPrompt | buildRefinePrompt
         -> Gemini gemini-2.5-flash (JSON mime type + JSON schema,
            temperature 0.7 generate / 0.3 refine, maxOutputTokens 16,384,
-           thinkingBudget 512)
-        -> JSON.parse -> LenientGeneratedPlanSchema; retry once if malformed
-  8. plan:   toPlan(fitPlanToIntake(generated, intake))
+           thinkingBudget 512, BLOCK_MEDIUM_AND_ABOVE safety settings)
+        -> JSON.parse -> LenientGeneratedPlanSchema; one shared retry for a malformed
+           reply or for supplier budget lines left without a vendor (the first
+           valid plan is kept if the retry fails or covers less)
+  9. plan:   toPlan(fitPlanToIntake(generated, intake))
      refine: mergeRefinedPlan(previous, fitPlanToIntake(generated, intake))
   |
   v  200 Plan
@@ -140,17 +149,20 @@ Importing a file on `/` dispatches `replace` with the validated workspace.
 Reducer actions ([lib/workspace.ts](../lib/workspace.ts), `WorkspaceAction`): `replace`,
 `setAmount`, `addLine`, `removeLine`, `setTotalBudget`, `toggleVendor`, `toggleMilestone`,
 `applyPlan` (stores the old plan as `previousPlan`), `updateIntake` (replaces intake and plan and
-clears `previousPlan`) and `undo` (restores `previousPlan`, one level). Every change updates
-`savedAt`; actions that change nothing return the same state object so the store skips the write.
+clears `previousPlan`) and `undo` (restores `previousPlan`, one level). `addLine` takes an optional `index`, which restores a removed line to its place (the budget Undo). Every change updates
+`savedAt`; actions that change nothing return the same state object so the store skips the write. The snapshot also carries `saveFailed`, set when a write (immediate or debounced) could not be stored; the workspace then shows an alert.
 
 ## Data model
 
 `StoredWorkspace` = `{ version: WORKSPACE_VERSION (2), intake, plan, previousPlan | null, savedAt }`,
 stored under `eventcraft.plan.v2`. A `Plan` has `summary`, `budget` (3-15 lines), `timeline` (4-25
 milestones in phases `planning`, `booking`, `final-prep`, `event-day`, each with `done`), `vendors`
-(3-15, up to 5 questions each, `booked`) and `ideas` (3-10). Items carry a UUID `id`. The model never
-produces ids, `done` or `booked`; the server adds them. On refine, `booked` is carried over by
-vendor category and `done` by milestone title.
+(3-15, up to 5 questions each, `booked`, and a `budgetCategory` naming the budget line each serves)
+and `ideas` (3-10). Budget lines the planner adds carry `addedByUser`. Items carry a UUID `id`. The
+model never produces ids, `done`, `booked` or `addedByUser`; the server adds them. The timeline is
+kept in date order with phases that only move forward. On refine, `booked` is carried over by
+vendor category, `done` by milestone title and `addedByUser` by budget category. A refine request
+is validated with the same new-plan date window as the intake.
 
 ## Design decisions
 
