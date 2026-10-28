@@ -17,7 +17,7 @@ describe("BudgetTable (editable)", () => {
     expect(screen.getAllByRole("spinbutton")).toHaveLength(3);
   });
 
-  it("calls onAmountChange with the sanitized number", () => {
+  it("calls onAmountChange with the sanitised number", () => {
     const onChange = vi.fn();
     render(
       <BudgetTable lines={lines} totalBudget={500_000} currency="INR" onAmountChange={onChange} />,

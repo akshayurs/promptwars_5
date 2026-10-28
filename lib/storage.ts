@@ -25,11 +25,17 @@ export const clearWorkspace = (storage: Storage | null = browserStorage()): void
 export const loadWorkspace = (
   storage: Storage | null = browserStorage(),
 ): StoredWorkspace | null => {
-  if (!storage) return null;
+  if (!storage) {
+    return null;
+  }
   const raw = attempt(() => storage.getItem(STORAGE_KEY), null);
-  if (raw === null) return null;
+  if (raw === null) {
+    return null;
+  }
   const parsed = attempt(() => StoredWorkspaceSchema.safeParse(JSON.parse(raw)), null);
-  if (parsed?.success) return parsed.data;
+  if (parsed?.success) {
+    return parsed.data;
+  }
   clearWorkspace(storage);
   return null;
 };
@@ -39,7 +45,9 @@ export const saveWorkspace = (
   workspace: StoredWorkspace,
   storage: Storage | null = browserStorage(),
 ): boolean => {
-  if (!storage) return false;
+  if (!storage) {
+    return false;
+  }
   return attempt(() => {
     storage.setItem(STORAGE_KEY, JSON.stringify(workspace));
     return true;

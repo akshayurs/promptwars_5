@@ -72,6 +72,11 @@ describe("workspace reducer", () => {
     expect(ws.plan.vendors[0]?.booked).toBe(false);
   });
 
+  it("toggleVendor with an unknown id returns the same state reference", () => {
+    const ws = makeWorkspace();
+    expect(reducer(ws, { type: "toggleVendor", id: "missing" })).toBe(ws);
+  });
+
   it("applyPlan stores the old plan as previousPlan", () => {
     const ws = makeWorkspace();
     const plan = makePlan();
@@ -123,13 +128,18 @@ describe("workspace reducer: budget lines", () => {
     expect(ws.plan.budget).toHaveLength(3);
   });
 
-  it("addLine at the maximum returns a new plan with the same lines", () => {
+  it("addLine with an index restores the line at that position", () => {
+    const budget = linesOf(LIMITS.budgetLines.min + 1);
+    const ws = makeWorkspace({ plan: makePlan({ budget }) });
+    const removed = reducer(ws, { type: "removeLine", id: budget[1]!.id });
+    const restored = reducer(removed, { type: "addLine", line: budget[1]!, index: 1 });
+    expect(restored?.plan.budget).toEqual(budget);
+  });
+
+  it("addLine at the maximum returns the same state reference", () => {
     const budget = linesOf(LIMITS.budgetLines.max);
     const ws = makeWorkspace({ plan: makePlan({ budget }) });
-    const next = reducer(ws, { type: "addLine", line: newLine(99) });
-    expect(next).not.toBe(ws);
-    expect(next?.plan.budget).toEqual(budget);
-    expect(next?.plan.budget).not.toBe(budget);
+    expect(reducer(ws, { type: "addLine", line: newLine(99) })).toBe(ws);
   });
 
   it("removeLine removes the matching line", () => {
@@ -144,14 +154,13 @@ describe("workspace reducer: budget lines", () => {
   it("removeLine at the minimum keeps every line", () => {
     const ws = makeWorkspace();
     expect(ws.plan.budget).toHaveLength(LIMITS.budgetLines.min);
-    const next = reducer(ws, { type: "removeLine", id: ws.plan.budget[0]!.id });
-    expect(next?.plan.budget).toEqual(ws.plan.budget);
+    expect(reducer(ws, { type: "removeLine", id: ws.plan.budget[0]!.id })).toBe(ws);
   });
 
-  it("removeLine with an unknown id keeps every line", () => {
+  it("removeLine with an unknown id returns the same state reference", () => {
     const budget = linesOf(LIMITS.budgetLines.min + 1);
     const ws = makeWorkspace({ plan: makePlan({ budget }) });
-    expect(reducer(ws, { type: "removeLine", id: "missing" })?.plan.budget).toEqual(budget);
+    expect(reducer(ws, { type: "removeLine", id: "missing" })).toBe(ws);
   });
 
   it("budget line actions on null state return null", () => {

@@ -1,4 +1,6 @@
-import { useId, type ReactElement } from "react";
+"use client";
+
+import { memo, useId, type ReactElement } from "react";
 
 import {
   milestoneDate,
@@ -6,10 +8,9 @@ import {
   relativeLabel,
   type Urgency,
 } from "@/components/timeline/milestoneDates";
-import { bindToggle, CheckControl } from "@/components/ui/CheckControl";
+import { bindToggle, CheckControl, type Toggle } from "@/components/ui/CheckControl";
 import { CheckIcon } from "@/components/ui/Icons";
 import { CARD, badgeClass } from "@/components/ui/styles";
-import type { Toggle } from "@/components/workspace/types";
 import { formatDate } from "@/lib/format";
 import type { Milestone } from "@/lib/schema";
 
@@ -38,22 +39,35 @@ const StatusBadge = ({
       </span>
     );
   }
-  if (urgency === null) return null;
+  if (urgency === null) {
+    return null;
+  }
   return <span className={URGENCY_CLASSES[urgency]}>{URGENCY_LABELS[urgency]}</span>;
 };
 
 const TITLE = "font-semibold";
 const TITLE_DONE = "font-semibold text-ink-muted line-through decoration-1";
 
-type ItemProps = { milestone: Milestone; eventDate: string; onToggle: Toggle | undefined };
+type ItemProps = {
+  milestone: Milestone;
+  eventDate: string;
+  /** The planner's local calendar day (YYYY-MM-DD), for the due badges. */
+  today: string;
+  onToggle: Toggle | undefined;
+};
 
-export const MilestoneItem = ({ milestone, eventDate, onToggle }: ItemProps): ReactElement => {
+export const MilestoneItem = memo(function MilestoneItem({
+  milestone,
+  eventDate,
+  today,
+  onToggle,
+}: ItemProps): ReactElement {
   const date = milestoneDate(eventDate, milestone);
-  const urgency = milestoneUrgency(date, milestone.done);
+  const urgency = milestoneUrgency(date, milestone.done, today);
   const titleClass = milestone.done ? TITLE_DONE : TITLE;
   const id = useId();
   return (
-    <li className={`${CARD} flex break-inside-avoid items-start gap-3 p-4`}>
+    <li className={`${CARD} flex break-inside-avoid items-start gap-3 p-4 wrap-anywhere`}>
       <CheckControl
         id={id}
         checked={milestone.done}
@@ -79,4 +93,4 @@ export const MilestoneItem = ({ milestone, eventDate, onToggle }: ItemProps): Re
       </div>
     </li>
   );
-};
+});

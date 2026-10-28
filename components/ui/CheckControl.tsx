@@ -5,7 +5,9 @@ import type { ReactElement } from "react";
 
 import { DoneMark } from "@/components/ui/DoneMark";
 import { CHECKBOX } from "@/components/ui/styles";
-import type { Toggle } from "@/components/workspace/types";
+
+/** Flips the done or booked state of the item with this id. */
+export type Toggle = (id: string) => void;
 
 export type CheckControlProps = {
   id: string;

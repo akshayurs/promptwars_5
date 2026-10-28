@@ -20,6 +20,11 @@ describe("loading states before the browser store is readable", () => {
     expect(html).toContain("Loading your plan");
   });
 
+  it("reserves at least a viewport of height so the footer stays below the fold", () => {
+    const html = renderToString(<PlanWorkspace />);
+    expect(html).toContain("min-h-svh");
+  });
+
   it.each([
     ["workspace", PlanLoading, "Workspace"],
     ["summary", SummaryLoading, "Summary"],

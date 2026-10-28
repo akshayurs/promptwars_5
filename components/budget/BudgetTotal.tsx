@@ -4,9 +4,10 @@ import { useId, type ReactElement } from "react";
 
 import { TextField } from "@/components/ui/Field";
 import { isValidTotal } from "@/lib/budget";
-import { LIMITS } from "@/lib/constants";
+import { LIMITS, MONEY_STEP } from "@/lib/constants";
+import type { Currency } from "@/lib/types";
 
-import type { Currency, TotalChange } from "./types";
+import type { TotalChange } from "./types";
 import { totalBudgetError, useAmountDraft } from "./useAmountDraft";
 
 type BudgetTotalProps = { totalBudget: number; currency: Currency; onTotalChange: TotalChange };
@@ -25,9 +26,9 @@ export const BudgetTotal = ({
         label={`Total budget (${currency})`}
         type="number"
         inputMode="decimal"
-        min={0}
+        min={MONEY_STEP}
         max={LIMITS.maxBudget}
-        step={1}
+        step={MONEY_STEP}
         value={field.value}
         onChange={field.onChange}
         onBlur={field.onBlur}

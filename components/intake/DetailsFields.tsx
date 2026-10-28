@@ -3,18 +3,18 @@
 import type { ReactElement, ReactNode } from "react";
 
 import { SelectField, TextField } from "@/components/ui/Field";
-import type { FieldIssues } from "@/lib/types";
 import { ADMISSION_TYPES, LIMITS } from "@/lib/constants";
-import { ADMISSION_LABELS } from "@/lib/eventTypes";
-import type { EventType } from "@/lib/schema";
+import { ADMISSION_LABELS, type DetailsFormValues } from "@/lib/eventTypes";
+import type { EventType, FieldIssues } from "@/lib/types";
 
 import { FIELD_LABELS } from "./fieldLabels";
-import { errorFor, toAdmission, type DetailsValues } from "./formState";
+import { errorFor } from "./fieldIssues";
+import { toAdmission } from "./formValues";
 
-type DetailsProps<T extends EventType> = {
-  values: DetailsValues[T];
+export type DetailsProps<T extends EventType> = {
+  values: DetailsFormValues[T];
   issues: FieldIssues;
-  onChange: (patch: Partial<DetailsValues[T]>) => void;
+  onChange: (patch: Partial<DetailsFormValues[T]>) => void;
 };
 
 const DetailsFieldset = ({

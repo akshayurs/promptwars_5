@@ -4,15 +4,14 @@ import type { ReactElement } from "react";
 
 import { CakeIcon, HeartIcon, UsersIcon } from "@/components/ui/Icons";
 import { EVENT_TYPES } from "@/lib/constants";
-import { EVENT_TYPE_LABELS } from "@/lib/eventTypes";
-import type { EventType } from "@/lib/schema";
+import { EVENT_TYPE_REGISTRY, type EventIcon } from "@/lib/eventTypes";
 
-import type { FieldsProps } from "./formState";
+import type { FieldsProps } from "./formValues";
 
-const EVENT_ICONS: Record<EventType, typeof HeartIcon> = {
-  wedding: HeartIcon,
-  birthday: CakeIcon,
-  community: UsersIcon,
+const EVENT_ICONS: Record<EventIcon, typeof HeartIcon> = {
+  heart: HeartIcon,
+  cake: CakeIcon,
+  users: UsersIcon,
 };
 
 const OPTION =
@@ -23,7 +22,8 @@ export const EventTypeChoice = ({ values, onChange }: FieldsProps): ReactElement
     <legend className="mb-1.5 text-sm font-medium">Event type</legend>
     <div className="grid gap-1 rounded-xl border border-line bg-surface-muted p-1 sm:grid-cols-3">
       {EVENT_TYPES.map((type) => {
-        const Icon = EVENT_ICONS[type];
+        const { label, icon } = EVENT_TYPE_REGISTRY[type];
+        const Icon = EVENT_ICONS[icon];
         return (
           <label key={type} className={OPTION}>
             <input
@@ -35,7 +35,7 @@ export const EventTypeChoice = ({ values, onChange }: FieldsProps): ReactElement
               className="size-4 shrink-0 accent-brand focus-visible:outline-none"
             />
             <Icon className="size-4 text-brand" />
-            {EVENT_TYPE_LABELS[type]}
+            {label}
           </label>
         );
       })}

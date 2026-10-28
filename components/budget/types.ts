@@ -1,14 +1,14 @@
-import type { BudgetLine, Intake } from "@/lib/schema";
+import type { BudgetLine } from "@/lib/schema";
 
-export type Currency = Intake["currency"];
 export type AmountChange = (id: string, amount: number) => void;
-export type AddLine = (line: BudgetLine) => void;
+/** Adds a line; `index` inserts it at that position (used to restore a removed line). */
+export type AddLine = (line: BudgetLine, index?: number) => void;
 export type RemoveLine = (id: string) => void;
 export type TotalChange = (amount: number) => void;
 export type RemoveControl = {
-  onRemove: (line: BudgetLine) => void;
+  onRemove: (line: BudgetLine, index: number) => void;
   disabled: boolean;
   reasonId: string;
 };
-
-export const amountInputId = (lineId: string): string => `budget-amount-${lineId}`;
+/** Ref callback factory that records a row's amount input so focus can move to it. */
+export type RegisterAmount = (lineId: string) => (input: HTMLInputElement) => () => void;

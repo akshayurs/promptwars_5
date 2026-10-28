@@ -24,6 +24,22 @@ describe("createLogger", () => {
     expect(lines[2]).toMatchObject({ level: "error", message: "boom" });
   });
 
+  it("never lets fields overwrite the reserved time, level and message keys", () => {
+    const sink = vi.fn<(line: string) => void>();
+    createLogger(sink, () => fixed).warn("real", {
+      time: "forged",
+      level: "info",
+      message: "forged",
+      route: "/api/plan",
+    });
+    expect(JSON.parse(sink.mock.calls[0]![0])).toEqual({
+      time: "2030-01-02T03:04:05.000Z",
+      level: "warn",
+      message: "real",
+      route: "/api/plan",
+    });
+  });
+
   it("emits one line per call", () => {
     const sink = vi.fn<(line: string) => void>();
     createLogger(sink, () => fixed).info("a\nb");

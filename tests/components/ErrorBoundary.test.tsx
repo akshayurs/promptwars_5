@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react";
+import { Children, isValidElement, type ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 
 import ErrorPage from "@/app/error";
+import GlobalError from "@/app/global-error";
 import { ErrorReference } from "@/components/ui/ErrorReference";
 
 const withDigest = (digest: string): Error => Object.assign(new Error("boom"), { digest });
@@ -29,5 +31,22 @@ describe("route error page", () => {
     expect(screen.getByText("d-1")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+});
+
+type Children = { children?: ReactNode };
+
+const childrenOf = (node: ReactNode): ReactNode[] =>
+  isValidElement<Children>(node) ? Children.toArray(node.props.children) : [];
+
+describe("global error page retry", () => {
+  it("calls retry when Try again is pressed", async () => {
+    const retry = vi.fn();
+    const [body] = childrenOf(GlobalError({ error: withDigest("g-2"), retry }));
+    const main = childrenOf(body).find((node) => isValidElement(node) && node.type === "main");
+    render(<>{main}</>);
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("g-2")).toBeVisible();
   });
 });

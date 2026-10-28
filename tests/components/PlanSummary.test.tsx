@@ -51,7 +51,7 @@ describe("PlanSummary", () => {
   });
 
   it("prints via window.print", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const print = vi.spyOn(window, "print").mockImplementation(() => undefined);
     render(<PlanSummary />);
     await user.click(screen.getByRole("button", { name: "Print" }));
@@ -59,7 +59,7 @@ describe("PlanSummary", () => {
   });
 
   it("exports JSON as a Blob download named after the event", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const blobs: Blob[] = [];
     const createUrl = vi.fn((blob: Blob) => {
       blobs.push(blob);
@@ -86,7 +86,7 @@ describe("PlanSummary", () => {
   });
 
   it("falls back to a generic file name for symbol-only event names", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     workspaceStore.dispatch({
       type: "replace",
       workspace: makeWorkspace({ intake: makeIntake({ eventName: "!!" }) }),
@@ -103,7 +103,7 @@ describe("PlanSummary", () => {
     ["Download calendar (.ics)", "asha-ravi-wedding-calendar.ics", "text/calendar;charset=utf-8"],
     ["Download budget (CSV)", "asha-ravi-wedding-budget.csv", "text/csv;charset=utf-8"],
   ])("%s downloads %s", async (label, fileName, type) => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const blobs: Blob[] = [];
     URL.createObjectURL = (blob: Blob) => {
       blobs.push(blob);
@@ -122,7 +122,7 @@ describe("PlanSummary", () => {
   });
 
   it("calendar export holds the event day and every milestone", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const blobs: Blob[] = [];
     URL.createObjectURL = (blob: Blob) => {
       blobs.push(blob);
@@ -139,7 +139,7 @@ describe("PlanSummary", () => {
   });
 
   it("budget export lists every line and a total", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const blobs: Blob[] = [];
     URL.createObjectURL = (blob: Blob) => {
       blobs.push(blob);
@@ -156,16 +156,20 @@ describe("PlanSummary", () => {
   });
 
   it("asks for confirmation before deleting, and Keep it cancels", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<PlanSummary />);
-    expect(screen.queryByRole("group", { name: "Confirm start over" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "Delete this plan from the browser?" }),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Start over" }));
-    expect(screen.getByRole("group", { name: "Confirm start over" })).toBeVisible();
+    expect(screen.getByRole("group", { name: "Delete this plan from the browser?" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Start over" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Keep it" })).toHaveFocus();
 
     await user.click(screen.getByRole("button", { name: "Keep it" }));
-    expect(screen.queryByRole("group", { name: "Confirm start over" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "Delete this plan from the browser?" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start over" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Start over" })).toHaveFocus();
     expect(readStoredWorkspace()).not.toBeNull();
@@ -173,7 +177,7 @@ describe("PlanSummary", () => {
   });
 
   it("Yes, delete clears storage and navigates home", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<PlanSummary />);
     expect(window.localStorage.getItem(STORAGE_KEY)).not.toBeNull();
     await user.click(screen.getByRole("button", { name: "Start over" }));

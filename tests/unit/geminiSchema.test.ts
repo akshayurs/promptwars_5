@@ -8,7 +8,9 @@ const DROPPED = ["$schema", "minLength", "maxLength", "minimum", "maximum", "min
 
 const collectKeys = (node: unknown, keys = new Set<string>()): Set<string> => {
   if (Array.isArray(node)) {
-    for (const item of node) collectKeys(item, keys);
+    for (const item of node) {
+      collectKeys(item, keys);
+    }
   } else if (typeof node === "object" && node !== null) {
     for (const [key, value] of Object.entries(node)) {
       keys.add(key);
@@ -33,7 +35,9 @@ describe("toGeminiResponseSchema", () => {
 
   it("drops every keyword Gemini cannot serve", () => {
     const keys = collectKeys(schema);
-    for (const key of DROPPED) expect(keys.has(key)).toBe(false);
+    for (const key of DROPPED) {
+      expect(keys.has(key)).toBe(false);
+    }
   });
 
   it("keeps the object structure, required fields, enums and descriptions", () => {

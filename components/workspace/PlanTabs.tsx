@@ -1,5 +1,7 @@
+"use client";
+
 import * as Tabs from "@radix-ui/react-tabs";
-import type { ReactElement } from "react";
+import { useCallback, useMemo, type ReactElement } from "react";
 
 import { BudgetTable, type BudgetTableProps } from "@/components/BudgetTable";
 import { IdeasList } from "@/components/IdeasList";
@@ -21,24 +23,29 @@ const TRIGGER =
 
 const PANEL = "rounded-lg focus-visible:outline-offset-4";
 
-const budgetHandlers = (
-  dispatch: Dispatch,
-): Required<
+type BudgetHandlers = Required<
   Pick<BudgetTableProps, "onAmountChange" | "onAddLine" | "onRemoveLine" | "onTotalChange">
-> => ({
-  onAmountChange: (id, amount) => {
-    dispatch({ type: "setAmount", id, amount });
-  },
-  onAddLine: (line) => {
-    dispatch({ type: "addLine", line });
-  },
-  onRemoveLine: (id) => {
-    dispatch({ type: "removeLine", id });
-  },
-  onTotalChange: (amount) => {
-    dispatch({ type: "setTotalBudget", amount });
-  },
-});
+>;
+
+// Stable handlers let memoised rows skip re-rendering on every keystroke elsewhere in the table.
+const useBudgetHandlers = (dispatch: Dispatch): BudgetHandlers =>
+  useMemo(
+    () => ({
+      onAmountChange: (id, amount) => {
+        dispatch({ type: "setAmount", id, amount });
+      },
+      onAddLine: (line, index) => {
+        dispatch({ type: "addLine", line, index });
+      },
+      onRemoveLine: (id) => {
+        dispatch({ type: "removeLine", id });
+      },
+      onTotalChange: (amount) => {
+        dispatch({ type: "setTotalBudget", amount });
+      },
+    }),
+    [dispatch],
+  );
 
 export const PlanTabs = ({
   workspace,
@@ -48,6 +55,19 @@ export const PlanTabs = ({
   dispatch: Dispatch;
 }): ReactElement => {
   const { intake, plan } = workspace;
+  const budgetHandlers = useBudgetHandlers(dispatch);
+  const toggleMilestone = useCallback(
+    (id: string) => {
+      dispatch({ type: "toggleMilestone", id });
+    },
+    [dispatch],
+  );
+  const toggleVendor = useCallback(
+    (id: string) => {
+      dispatch({ type: "toggleVendor", id });
+    },
+    [dispatch],
+  );
   return (
     <Tabs.Root defaultValue="budget" className="flex flex-col gap-5">
       <Tabs.List aria-label="Plan sections" className="flex flex-wrap border-b border-line">
@@ -63,25 +83,18 @@ export const PlanTabs = ({
           lines={plan.budget}
           totalBudget={intake.totalBudget}
           currency={intake.currency}
-          {...budgetHandlers(dispatch)}
+          {...budgetHandlers}
         />
       </Tabs.Content>
       <Tabs.Content value="timeline" className={PANEL}>
         <Timeline
           timeline={plan.timeline}
           eventDate={intake.eventDate}
-          onToggle={(id) => {
-            dispatch({ type: "toggleMilestone", id });
-          }}
+          onToggle={toggleMilestone}
         />
       </Tabs.Content>
       <Tabs.Content value="vendors" className={PANEL}>
-        <VendorChecklist
-          vendors={plan.vendors}
-          onToggle={(id) => {
-            dispatch({ type: "toggleVendor", id });
-          }}
-        />
+        <VendorChecklist vendors={plan.vendors} onToggle={toggleVendor} />
       </Tabs.Content>
       <Tabs.Content value="ideas" className={PANEL}>
         <IdeasList ideas={plan.ideas} />

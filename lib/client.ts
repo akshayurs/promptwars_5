@@ -22,7 +22,9 @@ const failure = (message: string, issues: FieldIssues = {}): ApiResult<never> =>
 
 const readFailure = (payload: unknown): ApiResult<never> => {
   const body = ErrorBodySchema.safeParse(payload);
-  if (!body.success) return failure("The request could not be completed.");
+  if (!body.success) {
+    return failure("The request could not be completed.");
+  }
   return failure(body.data.error, toIssueMap(body.data.issues ?? []));
 };
 
@@ -49,7 +51,9 @@ const postJson = async <T>({
     );
   }
   const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) return readFailure(payload);
+  if (!response.ok) {
+    return readFailure(payload);
+  }
   const parsed = schema.safeParse(payload);
   return parsed.success
     ? { ok: true, value: parsed.data }

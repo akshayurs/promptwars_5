@@ -26,8 +26,8 @@ export const StatefulTable = ({ initial }: { initial: readonly BudgetLine[] }): 
       totalBudget={500_000}
       currency="INR"
       onAmountChange={vi.fn()}
-      onAddLine={(line) => {
-        setCurrent((previous) => addBudgetLine(previous, line));
+      onAddLine={(line, index) => {
+        setCurrent((previous) => addBudgetLine(previous, line, index));
       }}
       onRemoveLine={(id) => {
         setCurrent((previous) => removeBudgetLine(previous, id));

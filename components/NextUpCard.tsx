@@ -1,4 +1,6 @@
-import { useId, type ReactElement } from "react";
+"use client";
+
+import { memo, useId, type ReactElement } from "react";
 
 import {
   milestoneDate,
@@ -8,23 +10,25 @@ import {
 import { IconBadge } from "@/components/ui/IconBadge";
 import { ArrowRightIcon, CheckIcon } from "@/components/ui/Icons";
 import { CARD } from "@/components/ui/styles";
-import { nextMilestone } from "@/lib/milestones";
+import { localTodayIso, systemClock, type Clock } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
+import { nextMilestone } from "@/lib/milestones";
 import type { Milestone } from "@/lib/schema";
 
-export type NextUpCardProps = { timeline: readonly Milestone[]; eventDate: string };
-
-const NextMilestone = ({
-  milestone,
-  eventDate,
-}: {
-  milestone: Milestone;
+export type NextUpCardProps = {
+  timeline: readonly Milestone[];
   eventDate: string;
-}): ReactElement => {
+  /** Source of "today" for the overdue notice; the planner's local calendar day is used. */
+  now?: Clock;
+};
+
+type NextMilestoneProps = { milestone: Milestone; eventDate: string; today: string };
+
+const NextMilestone = ({ milestone, eventDate, today }: NextMilestoneProps): ReactElement => {
   const date = milestoneDate(eventDate, milestone);
-  const overdue = milestoneUrgency(date, milestone.done) === "overdue";
+  const overdue = milestoneUrgency(date, milestone.done, today) === "overdue";
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5 wrap-anywhere">
       <p className="text-base font-semibold">{milestone.title}</p>
       <p className="text-sm font-medium text-ink-muted">
         <time dateTime={date}>{formatDate(date)}</time>
@@ -41,7 +45,12 @@ const NextMilestone = ({
   );
 };
 
-export const NextUpCard = ({ timeline, eventDate }: NextUpCardProps): ReactElement => {
+// Memoised: budget keystrokes re-render the workspace but never change the timeline.
+export const NextUpCard = memo(function NextUpCard({
+  timeline,
+  eventDate,
+  now = systemClock,
+}: NextUpCardProps): ReactElement {
   const next = nextMilestone(timeline);
   const headingId = useId();
   return (
@@ -55,11 +64,11 @@ export const NextUpCard = ({ timeline, eventDate }: NextUpCardProps): ReactEleme
           Next up
         </h2>
         {next ? (
-          <NextMilestone milestone={next} eventDate={eventDate} />
+          <NextMilestone milestone={next} eventDate={eventDate} today={localTodayIso(now)} />
         ) : (
           <p className="text-sm font-medium">All milestones are complete.</p>
         )}
       </div>
     </section>
   );
-};
+});

@@ -56,7 +56,7 @@ describe("RefinePanel", () => {
   });
 
   it("rejects instructions shorter than 3 characters without calling the API", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderPanel();
     await user.type(screen.getByLabelText("What should change?"), "  a ");
     await user.click(screen.getByRole("button", { name: "Apply refinement" }));
@@ -68,7 +68,7 @@ describe("RefinePanel", () => {
   });
 
   it("applies the returned plan, summarises the diff and clears the textarea", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const workspace = makeWorkspace();
     const next: Plan = {
       ...workspace.plan,
@@ -96,7 +96,7 @@ describe("RefinePanel", () => {
   });
 
   it("uses plural wording for multiple changes", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const workspace = makeWorkspace();
     const next: Plan = {
       ...workspace.plan,
@@ -116,7 +116,7 @@ describe("RefinePanel", () => {
   });
 
   it("reports when nothing changed", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const workspace = makeWorkspace();
     mockedRefine.mockResolvedValueOnce({ ok: true, value: workspace.plan });
     renderPanel(workspace);
@@ -126,7 +126,7 @@ describe("RefinePanel", () => {
   });
 
   it("shows the API error in the status region, not as a field error", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mockedRefine.mockResolvedValueOnce({ ok: false, message: "Model overloaded", issues: {} });
     const onApply = vi.fn();
     renderPanel(makeWorkspace(), { onApply });
@@ -143,7 +143,7 @@ describe("RefinePanel", () => {
   });
 
   it("discards the result when the plan changed while refining", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const workspace = makeWorkspace();
     const pending = deferred();
     const onApply = vi.fn();
@@ -168,8 +168,8 @@ describe("RefinePanel", () => {
     expect(screen.getByRole("button", { name: "Undo last refinement" })).toBeDisabled();
   });
 
-  it("calls onUndo, clears the stale summary and moves focus to the status", async () => {
-    const user = userEvent.setup();
+  it("calls onUndo, clears the stale summary and moves focus to the instruction", async () => {
+    const user = userEvent.setup({ delay: null });
     const workspace = makeWorkspace({ previousPlan: makePlan() });
     mockedRefine.mockResolvedValueOnce({ ok: true, value: workspace.plan });
     const onUndo = vi.fn();
@@ -184,11 +184,12 @@ describe("RefinePanel", () => {
     expect(onUndo).toHaveBeenCalledTimes(1);
     expect(statusRegion()).toHaveTextContent("Refinement undone.");
     expect(screen.queryByText("The plan already matched your request.")).not.toBeInTheDocument();
-    expect(statusRegion()).toHaveFocus();
+    expect(screen.getByLabelText("What should change?")).toHaveFocus();
+    expect(statusRegion()).not.toHaveAttribute("tabindex");
   });
 
   it("keeps buttons focusable but inert while pending", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const pending = deferred();
     const onUndo = vi.fn();
     renderPanel(makeWorkspace({ previousPlan: makePlan() }), { onUndo });
@@ -212,7 +213,7 @@ describe("RefinePanel", () => {
   });
 
   it("ignores a second submit while pending", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const pending = deferred();
     renderPanel();
     const textarea = screen.getByLabelText("What should change?");
@@ -228,7 +229,7 @@ describe("RefinePanel", () => {
   });
 
   it("cancels a pending refinement, announces it and ignores the late result", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const pending = deferred();
     const onApply = vi.fn();
     renderPanel(makeWorkspace(), { onApply });
@@ -241,7 +242,7 @@ describe("RefinePanel", () => {
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(signal?.aborted).toBe(true);
     expect(statusRegion()).toHaveTextContent("Refinement cancelled.");
-    expect(statusRegion()).toHaveFocus();
+    expect(textarea).toHaveFocus();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply refinement" })).not.toHaveAttribute(
       "aria-busy",
@@ -257,7 +258,7 @@ describe("RefinePanel", () => {
   });
 
   it("clears the cancellation notice when the next refinement starts", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     deferred();
     const second = deferred();
     renderPanel();
@@ -271,7 +272,7 @@ describe("RefinePanel", () => {
   });
 
   it("aborts the pending request on unmount", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const pending = deferred();
     const onApply = vi.fn();
     const { unmount } = renderPanel(makeWorkspace(), { onApply });

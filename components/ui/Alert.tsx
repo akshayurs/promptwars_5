@@ -53,7 +53,7 @@ export const Alert = ({
     >
       {TONES[tone].glyph}
     </span>
-    <div className="flex flex-col gap-0.5">
+    <div className="flex min-w-0 flex-col gap-0.5 wrap-anywhere">
       {title ? <p className="font-semibold">{title}</p> : null}
       <div>{children}</div>
     </div>

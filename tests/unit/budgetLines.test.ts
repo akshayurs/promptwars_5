@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addBudgetLine, removeBudgetLine } from "@/lib/budget";
+import { addBudgetLine, isValidLineAmount, removeBudgetLine } from "@/lib/budget";
 import { LIMITS } from "@/lib/constants";
 import type { BudgetLine } from "@/lib/schema";
 
@@ -28,16 +28,26 @@ describe("addBudgetLine", () => {
     expect(addBudgetLine(lines, line(50))).toHaveLength(LIMITS.budgetLines.max);
   });
 
-  it("returns an unchanged copy at the maximum", () => {
-    const lines = Object.freeze(linesOf(LIMITS.budgetLines.max));
-    const next = addBudgetLine(lines, line(50));
-    expect(next).toEqual(lines);
-    expect(next).not.toBe(lines);
+  it("inserts at the given index, restoring a removed line in place", () => {
+    const lines = linesOf(LIMITS.budgetLines.min + 1);
+    const removed = lines[1]!;
+    const restored = addBudgetLine(removeBudgetLine(lines, removed.id), removed, 1);
+    expect(restored).toEqual(lines);
   });
 
-  it("returns an unchanged copy above the maximum", () => {
+  it("returns the same array at the maximum", () => {
+    const lines = Object.freeze(linesOf(LIMITS.budgetLines.max));
+    expect(addBudgetLine(lines, line(50))).toBe(lines);
+  });
+
+  it("returns the same array above the maximum", () => {
     const lines = linesOf(LIMITS.budgetLines.max + 1);
-    expect(addBudgetLine(lines, line(50))).toEqual(lines);
+    expect(addBudgetLine(lines, line(50))).toBe(lines);
+  });
+
+  it("returns the same array when a line with that id already exists", () => {
+    const lines = linesOf(LIMITS.budgetLines.min);
+    expect(addBudgetLine(lines, { ...lines[0]!, category: "Copy" }, 0)).toBe(lines);
   });
 });
 
@@ -49,22 +59,31 @@ describe("removeBudgetLine", () => {
     expect(lines).toHaveLength(LIMITS.budgetLines.min + 1);
   });
 
-  it("returns an unchanged copy at the minimum", () => {
+  it("returns the same array at the minimum", () => {
     const lines = Object.freeze(linesOf(LIMITS.budgetLines.min));
-    const next = removeBudgetLine(lines, lines[0]!.id);
-    expect(next).toEqual(lines);
-    expect(next).not.toBe(lines);
+    expect(removeBudgetLine(lines, lines[0]!.id)).toBe(lines);
   });
 
-  it("returns an unchanged copy below the minimum", () => {
+  it("returns the same array below the minimum", () => {
     const lines = linesOf(LIMITS.budgetLines.min - 1);
-    expect(removeBudgetLine(lines, lines[0]!.id)).toEqual(lines);
+    expect(removeBudgetLine(lines, lines[0]!.id)).toBe(lines);
   });
 
-  it("returns an equal copy when the id is unknown", () => {
+  it("returns the same array when the id is unknown", () => {
     const lines = linesOf(LIMITS.budgetLines.min + 2);
-    const next = removeBudgetLine(lines, "missing");
-    expect(next).toEqual(lines);
-    expect(next).not.toBe(lines);
+    expect(removeBudgetLine(lines, "missing")).toBe(lines);
   });
+});
+
+describe("isValidLineAmount", () => {
+  it.each([0, 1, 0.5, LIMITS.maxBudget])("accepts %d", (amount) => {
+    expect(isValidLineAmount(amount)).toBe(true);
+  });
+
+  it.each([-1, LIMITS.maxBudget + 1, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects %d",
+    (amount) => {
+      expect(isValidLineAmount(amount)).toBe(false);
+    },
+  );
 });

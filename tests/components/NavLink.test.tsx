@@ -16,5 +16,9 @@ describe("NavLink", () => {
     );
     expect(screen.getByRole("link", { name: "Workspace" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "New plan" })).not.toHaveAttribute("aria-current");
+    // The current page is underlined, not only coloured.
+    expect(screen.getByRole("link", { name: "Workspace" }).className).toContain(
+      "aria-[current=page]:underline",
+    );
   });
 });

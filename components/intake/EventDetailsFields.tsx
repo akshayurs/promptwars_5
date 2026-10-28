@@ -2,55 +2,39 @@
 
 import type { ReactElement } from "react";
 
-import type { FieldIssues } from "@/lib/types";
-import type { EventType } from "@/lib/schema";
+import type { EventType, FieldIssues } from "@/lib/types";
 
-import { BirthdayFields, CommunityFields, WeddingFields } from "./DetailsFields";
-import type { DetailsUpdate, DetailsValues } from "./formState";
+import { BirthdayFields, CommunityFields, WeddingFields, type DetailsProps } from "./DetailsFields";
+import { detailsFor, type DetailsUpdate, type DetailsValues } from "./formValues";
 
-type EventDetailsProps = {
-  type: EventType;
+const DETAILS_FIELDS: { readonly [T in EventType]: (props: DetailsProps<T>) => ReactElement } = {
+  wedding: WeddingFields,
+  birthday: BirthdayFields,
+  community: CommunityFields,
+};
+
+type EventDetailsProps<T extends EventType> = {
+  type: T;
   details: DetailsValues;
   issues: FieldIssues;
   onDetail: DetailsUpdate;
 };
 
-export const EventDetailsFields = ({
+/** The fieldset for the chosen event type's own details. */
+export const EventDetailsFields = <T extends EventType>({
   type,
   details,
   issues,
   onDetail,
-}: EventDetailsProps): ReactElement => {
-  switch (type) {
-    case "wedding":
-      return (
-        <WeddingFields
-          values={details.wedding}
-          issues={issues}
-          onChange={(patch) => {
-            onDetail("wedding", patch);
-          }}
-        />
-      );
-    case "birthday":
-      return (
-        <BirthdayFields
-          values={details.birthday}
-          issues={issues}
-          onChange={(patch) => {
-            onDetail("birthday", patch);
-          }}
-        />
-      );
-    case "community":
-      return (
-        <CommunityFields
-          values={details.community}
-          issues={issues}
-          onChange={(patch) => {
-            onDetail("community", patch);
-          }}
-        />
-      );
-  }
+}: EventDetailsProps<T>): ReactElement => {
+  const Fields: (props: DetailsProps<T>) => ReactElement = DETAILS_FIELDS[type];
+  return (
+    <Fields
+      values={detailsFor(details, type)}
+      issues={issues}
+      onChange={(patch) => {
+        onDetail(type, patch);
+      }}
+    />
+  );
 };

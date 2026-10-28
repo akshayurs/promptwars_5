@@ -8,10 +8,12 @@ import {
   type StoredWorkspace,
 } from "@/lib/schema";
 
+import { FIXED_NOW } from "../unit/clock";
+
 const FUTURE_DAYS = 60;
 
 export const futureDate = (days: number = FUTURE_DAYS): string =>
-  new Date(Date.now() + days * DAY_MS).toISOString().slice(0, 10);
+  new Date(FIXED_NOW.getTime() + days * DAY_MS).toISOString().slice(0, 10);
 
 type IntakeOverrides = Partial<Omit<Intake, "eventType" | "details">>;
 
@@ -140,7 +142,7 @@ export const makeWorkspace = (overrides: Partial<StoredWorkspace> = {}): StoredW
   intake: makeIntake(),
   plan: makePlan(),
   previousPlan: null,
-  savedAt: new Date().toISOString(),
+  savedAt: FIXED_NOW.toISOString(),
   ...overrides,
 });
 

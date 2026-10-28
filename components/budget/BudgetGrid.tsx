@@ -3,9 +3,10 @@ import type { ReactElement } from "react";
 import { EYEBROW } from "@/components/ui/styles";
 import { formatMoney } from "@/lib/format";
 import type { BudgetLine } from "@/lib/schema";
+import type { Currency } from "@/lib/types";
 
 import { BudgetRow, RATIONALE_COLUMN } from "./BudgetRow";
-import type { AmountChange, Currency, RemoveControl } from "./types";
+import type { AmountChange, RegisterAmount, RemoveControl } from "./types";
 
 type BudgetGridProps = {
   lines: readonly BudgetLine[];
@@ -13,6 +14,7 @@ type BudgetGridProps = {
   allocated: number;
   currency: Currency;
   onAmountChange: AmountChange | undefined;
+  registerAmount: RegisterAmount;
   remove: RemoveControl | null;
 };
 
@@ -22,6 +24,7 @@ export const BudgetGrid = ({
   allocated,
   currency,
   onAmountChange,
+  registerAmount,
   remove,
 }: BudgetGridProps): ReactElement => (
   <div className="relative -mx-5 overflow-x-auto px-5 sm:mx-0 sm:px-0">
@@ -46,12 +49,14 @@ export const BudgetGrid = ({
         </tr>
       </thead>
       <tbody>
-        {lines.map((line) => (
+        {lines.map((line, index) => (
           <BudgetRow
             key={line.id}
             line={line}
+            index={index}
             currency={currency}
             onAmountChange={onAmountChange}
+            registerAmount={registerAmount}
             remove={remove}
           />
         ))}

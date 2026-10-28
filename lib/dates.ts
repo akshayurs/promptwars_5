@@ -29,3 +29,12 @@ export const daysUntil = (isoDay: string, now: Clock = systemClock): number =>
 /** The calendar day `deltaDays` after (or, when negative, before) the given day. */
 export const shiftDate = (isoDay: string, deltaDays: number): string =>
   toIsoDay(parseIsoDay(isoDay) + deltaDays * DAY_MS);
+
+/**
+ * The visitor's local calendar day (YYYY-MM-DD) for the injected clock. Countdowns and due badges
+ * in the UI use it, so they match the planner's wall calendar; server validation stays on UTC.
+ */
+export const localTodayIso = (now: Clock = systemClock): string => {
+  const instant = now();
+  return toIsoDay(Date.UTC(instant.getFullYear(), instant.getMonth(), instant.getDate()));
+};

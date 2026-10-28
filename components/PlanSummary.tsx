@@ -15,6 +15,7 @@ import { useWorkspace } from "@/components/useWorkspace";
 import { VendorChecklist } from "@/components/VendorChecklist";
 import { EmptyWorkspace, LoadingNotice } from "@/components/WorkspaceStates";
 import type { StoredWorkspace } from "@/lib/schema";
+import { PAGE_TITLES } from "@/lib/messages";
 
 const LoadedSummary = ({
   workspace,
@@ -32,7 +33,9 @@ const LoadedSummary = ({
         <h1 ref={headingRef} tabIndex={-1} className={PAGE_TITLE}>
           {intake.eventName}
         </h1>
-        <p className="max-w-3xl text-lg leading-relaxed text-pretty">{plan.summary}</p>
+        <p className="max-w-3xl text-lg leading-relaxed text-pretty wrap-anywhere">
+          {plan.summary}
+        </p>
         <EventFacts intake={workspace.intake} />
         <SummaryActions workspace={workspace} onReset={onReset} />
       </header>
@@ -51,8 +54,12 @@ const LoadedSummary = ({
 export const PlanSummary = (): ReactElement => {
   const router = useRouter();
   const { workspace, status, dispatch } = useWorkspace();
-  if (status === "loading") return <LoadingNotice title="Summary" />;
-  if (!workspace) return <EmptyWorkspace title="Summary" />;
+  if (status === "loading") {
+    return <LoadingNotice title={PAGE_TITLES.summary} />;
+  }
+  if (!workspace) {
+    return <EmptyWorkspace title={PAGE_TITLES.summary} />;
+  }
   return (
     <LoadedSummary
       workspace={workspace}

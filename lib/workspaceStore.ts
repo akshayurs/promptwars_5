@@ -1,9 +1,16 @@
 import { PERSIST_DEBOUNCE_MS, STORAGE_KEY } from "@/lib/constants";
-import { browserStorage, clearWorkspace, loadWorkspace, saveWorkspace } from "@/lib/storage";
+import { browserStorage, loadWorkspace } from "@/lib/storage";
 import { workspaceReducer, type WorkspaceAction, type WorkspaceState } from "@/lib/workspace";
+import { createPersistence } from "@/lib/workspacePersistence";
 
 export type WorkspaceSnapshot =
-  { status: "loading"; workspace: null } | { status: "ready"; workspace: WorkspaceState };
+  | { status: "loading"; workspace: null; saveFailed: false }
+  | {
+      status: "ready";
+      workspace: WorkspaceState;
+      /** The latest change could not be written to storage (quota exceeded or blocked). */
+      saveFailed: boolean;
+    };
 
 export type WorkspaceStore = {
   subscribe: (listener: () => void) => () => void;
@@ -14,7 +21,9 @@ export type WorkspaceStore = {
   flush: () => void;
 };
 
-const LOADING: WorkspaceSnapshot = { status: "loading", workspace: null };
+type ReadySnapshot = Extract<WorkspaceSnapshot, { status: "ready" }>;
+
+const LOADING: WorkspaceSnapshot = { status: "loading", workspace: null, saveFailed: false };
 
 /** Actions fired per keystroke; their writes are coalesced instead of serialised every time. */
 const DEBOUNCED_ACTIONS: ReadonlySet<WorkspaceAction["type"]> = new Set([
@@ -22,95 +31,91 @@ const DEBOUNCED_ACTIONS: ReadonlySet<WorkspaceAction["type"]> = new Set([
   "setTotalBudget",
 ]);
 
-type Persistence = {
-  write: (workspace: WorkspaceState) => void;
-  schedule: (workspace: WorkspaceState) => void;
-  flush: () => void;
-  cancel: () => void;
+type SubscriptionContext = {
+  listeners: Set<() => void>;
+  /** Drops pending writes and the cached snapshot when another tab changed the stored plan. */
+  onExternalChange: () => void;
 };
 
-// A pending write is flushed when the page is hidden or unloaded, so no edit is lost.
-const createPersistence = (storage: () => Storage | null, delayMs: number): Persistence => {
-  let pending: { workspace: WorkspaceState } | null = null;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-
-  const flush = (): void => {
-    if (pending) write(pending.workspace);
-  };
-  const onVisibilityChange = (): void => {
-    if (document.visibilityState === "hidden") flush();
-  };
-  const cancel = (): void => {
-    clearTimeout(timer);
-    pending = null;
-    window.removeEventListener("pagehide", flush);
-    document.removeEventListener("visibilitychange", onVisibilityChange);
-  };
-  const write = (workspace: WorkspaceState): void => {
-    cancel();
-    if (workspace) saveWorkspace(workspace, storage());
-    else clearWorkspace(storage());
-  };
-  const schedule = (workspace: WorkspaceState): void => {
-    if (!pending) {
-      window.addEventListener("pagehide", flush);
-      document.addEventListener("visibilitychange", onVisibilityChange);
+// Another tab wrote or cleared the plan: its copy wins, so the cache is dropped and reloaded.
+const subscribeWithStorageSync = (
+  listener: () => void,
+  { listeners, onExternalChange }: SubscriptionContext,
+): (() => void) => {
+  listeners.add(listener);
+  const onStorage = (event: StorageEvent): void => {
+    if (event.key !== STORAGE_KEY && event.key !== null) {
+      return;
     }
-    pending = { workspace };
-    clearTimeout(timer);
-    timer = setTimeout(flush, delayMs);
+    onExternalChange();
+    listener();
   };
-  return { write, schedule, flush, cancel };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
 };
 
 /**
  * External store for `useSyncExternalStore`: loads the saved workspace lazily, persists changes
- * (keystroke-rate edits after a quiet period, everything else at once) and follows edits made
- * in other tabs. In-memory updates and subscribers are always immediate; dispatches that leave
- * the state object unchanged neither persist nor notify.
+ * (keystroke-rate edits after a quiet period, everything else at once), reports writes the
+ * browser refused and follows edits made in other tabs. In-memory updates and subscribers are
+ * always immediate; dispatches that leave the state object unchanged neither persist nor notify.
  */
 export const createWorkspaceStore = (
   storage: () => Storage | null,
   reducer = workspaceReducer,
   writeDelayMs = PERSIST_DEBOUNCE_MS,
 ): WorkspaceStore => {
-  let snapshot: WorkspaceSnapshot | null = null;
+  let snapshot: ReadySnapshot | null = null;
   const listeners = new Set<() => void>();
-  const persistence = createPersistence(storage, writeDelayMs);
 
-  const current = (): WorkspaceSnapshot => {
-    snapshot ??= { status: "ready", workspace: loadWorkspace(storage()) };
+  const current = (): ReadySnapshot => {
+    snapshot ??= { status: "ready", workspace: loadWorkspace(storage()), saveFailed: false };
     return snapshot;
   };
+  const publish = (next: ReadySnapshot): void => {
+    snapshot = next;
+    listeners.forEach((listener) => {
+      listener();
+    });
+  };
+  const persistence = createPersistence({
+    storage,
+    delayMs: writeDelayMs,
+    onDeferredWrite: (saved) => {
+      const latest = current();
+      if (latest.saveFailed === saved) {
+        publish({ ...latest, saveFailed: !saved });
+      }
+    },
+  });
 
   return {
-    subscribe: (listener) => {
-      listeners.add(listener);
-      // Another tab wrote or cleared the plan: its copy wins, so drop the cache and reload.
-      const onStorage = (event: StorageEvent): void => {
-        if (event.key !== STORAGE_KEY && event.key !== null) return;
-        persistence.cancel();
-        snapshot = null;
-        listener();
-      };
-      window.addEventListener("storage", onStorage);
-      return () => {
-        listeners.delete(listener);
-        window.removeEventListener("storage", onStorage);
-      };
-    },
+    subscribe: (listener) =>
+      subscribeWithStorageSync(listener, {
+        listeners,
+        onExternalChange: () => {
+          persistence.cancel();
+          snapshot = null;
+        },
+      }),
     getSnapshot: current,
     getServerSnapshot: () => LOADING,
     dispatch: (action) => {
       const before = current();
       const workspace = reducer(before.workspace, action);
-      if (workspace === before.workspace) return;
-      snapshot = { status: "ready", workspace };
-      if (DEBOUNCED_ACTIONS.has(action.type)) persistence.schedule(workspace);
-      else persistence.write(workspace);
-      listeners.forEach((listener) => {
-        listener();
-      });
+      if (workspace === before.workspace) {
+        return;
+      }
+      let { saveFailed } = before;
+      if (DEBOUNCED_ACTIONS.has(action.type)) {
+        persistence.schedule(workspace);
+      } else {
+        saveFailed = !persistence.write(workspace);
+      }
+      publish({ status: "ready", workspace, saveFailed });
     },
     flush: persistence.flush,
   };

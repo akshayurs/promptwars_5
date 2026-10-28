@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { createPlanFlow } from "@/components/intake/intakeFlows";
 import { IntakeForm } from "@/components/IntakeForm";
 import type { requestPlan } from "@/lib/client";
+import { MONEY_STEP } from "@/lib/constants";
 import type { Plan } from "@/lib/schema";
 import { workspaceStore } from "@/lib/workspaceStore";
 
@@ -37,8 +38,32 @@ describe("IntakeForm", () => {
     expect(screen.getByRole("radio", { name: "Community event" })).not.toBeChecked();
   });
 
+  it("spells out each currency next to its code", () => {
+    render(<IntakeForm flow={flow} />);
+    const options = within(screen.getByLabelText("Currency")).getAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual([
+      "INR – Indian rupee",
+      "USD – US dollar",
+      "EUR – Euro",
+      "GBP – British pound",
+    ]);
+    expect(options.map((option) => (option as HTMLOptionElement).value)).toEqual([
+      "INR",
+      "USD",
+      "EUR",
+      "GBP",
+    ]);
+  });
+
+  it("bounds the total budget to positive amounts in minor-unit steps", () => {
+    render(<IntakeForm flow={flow} />);
+    const total = screen.getByLabelText("Total budget");
+    expect(total).toHaveAttribute("min", String(MONEY_STEP));
+    expect(total).toHaveAttribute("step", String(MONEY_STEP));
+  });
+
   it("switches the selected event type", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     await user.click(screen.getByRole("radio", { name: "Birthday" }));
     expect(screen.getByRole("radio", { name: "Birthday" })).toBeChecked();
@@ -46,7 +71,7 @@ describe("IntakeForm", () => {
   });
 
   it("shows field errors for an empty submit and does not call the API", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
 
@@ -68,14 +93,14 @@ describe("IntakeForm", () => {
       expect(field).toHaveAttribute("aria-invalid", "true");
       const errorId = field.getAttribute("aria-describedby")?.split(" ").at(-1);
       expect(errorId).toMatch(/-error$/);
-      expect(document.getElementById(errorId ?? "")?.textContent).toBeTruthy();
+      expect(document.getElementById(errorId ?? "")).toHaveTextContent(/\S/);
     }
     expect(screen.getByLabelText("Must-haves (optional)")).not.toHaveAttribute("aria-invalid");
     expect(mockedRequestPlan).not.toHaveBeenCalled();
   });
 
   it("submits trimmed strings and numeric values, stores the plan and navigates", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const plan: Plan = makePlan();
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: plan });
     const date = futureDate(30);
@@ -112,7 +137,7 @@ describe("IntakeForm", () => {
   });
 
   it("rejects a past date client-side", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     await fillForm(user, "2001-01-01");
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
@@ -121,7 +146,7 @@ describe("IntakeForm", () => {
   });
 
   it("shows server issues on the matching field and the message in the alert", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mockedRequestPlan.mockResolvedValueOnce({
       ok: false,
       message: "Check your inputs",
@@ -141,7 +166,7 @@ describe("IntakeForm", () => {
   });
 
   it("shows a general API failure without field errors", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mockedRequestPlan.mockResolvedValueOnce({ ok: false, message: "Network error.", issues: {} });
     render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);

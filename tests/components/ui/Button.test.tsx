@@ -33,6 +33,23 @@ describe("Button", () => {
     expect(screen.queryByText("Save")).not.toBeInTheDocument();
   });
 
+  it("keeps the busy state when callers pass their own aria attributes", () => {
+    render(
+      <Button busy aria-disabled={false} aria-busy={false} type="submit">
+        Save
+      </Button>,
+    );
+    const button = screen.getByRole("button", { name: "Working…" });
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveAttribute("type", "submit");
+  });
+
+  it("passes a caller's aria-disabled through when not busy", () => {
+    render(<Button aria-disabled>Remove</Button>);
+    expect(screen.getByRole("button", { name: "Remove" })).toHaveAttribute("aria-disabled", "true");
+  });
+
   it("uses the default busy label", () => {
     render(<Button busy>Save</Button>);
     expect(screen.getByRole("button", { name: "Working…" })).toHaveAttribute(
@@ -42,7 +59,7 @@ describe("Button", () => {
   });
 
   it("ignores clicks and blocks form submission while busy", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onClick = vi.fn();
     const onSubmit = vi.fn();
     render(
@@ -83,7 +100,7 @@ describe("Button", () => {
   });
 
   it("respects the disabled prop and does not fire clicks", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onClick = vi.fn();
     render(
       <Button disabled onClick={onClick}>
@@ -97,7 +114,7 @@ describe("Button", () => {
   });
 
   it("calls onClick when enabled", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onClick = vi.fn();
     render(<Button onClick={onClick}>Yes</Button>);
     await user.click(screen.getByRole("button", { name: "Yes" }));

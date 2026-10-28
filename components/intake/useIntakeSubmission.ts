@@ -4,11 +4,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
 import { usePendingRequest, type PendingRequest } from "@/components/usePendingRequest";
+import { INVALID_FIELDS_MESSAGE } from "@/lib/messages";
 import { IntakeSchema, type Intake } from "@/lib/schema";
 import type { FieldIssues } from "@/lib/types";
 
-import { firstPathIssues } from "./formState";
-import type { IntakeFlow } from "./intakeFlows";
+import { firstPathIssues } from "./fieldIssues";
+import { STALE_EDIT_MESSAGE, type IntakeFlow } from "./intakeFlows";
 
 type Submission = {
   issues: FieldIssues;
@@ -24,7 +25,9 @@ type Submission = {
 const useFocusOnFailure = (failures: number): RefObject<HTMLDivElement | null> => {
   const alertRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (failures > 0) alertRef.current?.focus();
+    if (failures > 0) {
+      alertRef.current?.focus();
+    }
   }, [failures]);
   return alertRef;
 };
@@ -48,28 +51,38 @@ export const useIntakeSubmission = (flow: IntakeFlow): Submission => {
   const send = async (intake: Intake): Promise<void> => {
     const signal = begin();
     const result = await flow.send(intake, signal);
-    if (!settle(signal)) return;
+    if (!settle(signal)) {
+      return;
+    }
     if (!result.ok) {
       fail(result.message, result.issues);
       return;
     }
-    flow.save(intake, result.value);
+    if (!flow.save(intake, result.value)) {
+      fail(STALE_EDIT_MESSAGE, {});
+      return;
+    }
     router.push("/plan");
   };
 
   const submit = (candidate: unknown, confirmed = false): void => {
-    if (request.busy) return;
+    if (request.busy) {
+      return;
+    }
     const parsed = IntakeSchema.safeParse(candidate);
     setReplacing(null);
     if (!parsed.success) {
-      fail("Please correct the highlighted fields.", firstPathIssues(parsed.error.issues));
+      fail(INVALID_FIELDS_MESSAGE, firstPathIssues(parsed.error.issues));
       return;
     }
     setIssues({});
     setMessage(null);
     const replaced = confirmed ? null : flow.replaces();
-    if (replaced === null) void send(parsed.data);
-    else setReplacing(replaced);
+    if (replaced === null) {
+      void send(parsed.data);
+    } else {
+      setReplacing(replaced);
+    }
   };
 
   const keepCurrent = (): void => {

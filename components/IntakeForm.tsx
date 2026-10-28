@@ -11,14 +11,14 @@ import {
   EMPTY,
   toCandidate,
   toFormValues,
-  useDetailsState,
   type CommonKey,
   type ControlEvent,
   type FormValues,
-} from "./intake/formState";
+} from "./intake/formValues";
 import { IntakeFields } from "./intake/IntakeFields";
 import { createPlanFlow, type IntakeFlow } from "./intake/intakeFlows";
 import { SubmitArea } from "./intake/SubmitArea";
+import { useDetailsState } from "./intake/useDetailsState";
 import { useIntakeSubmission } from "./intake/useIntakeSubmission";
 
 const NEW_PLAN_FLOW = createPlanFlow();

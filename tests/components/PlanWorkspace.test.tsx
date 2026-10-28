@@ -3,18 +3,16 @@ import userEvent from "@testing-library/user-event";
 
 import { PlanWorkspace } from "@/components/PlanWorkspace";
 import { requestRefinement } from "@/lib/client";
-import { todayIso } from "@/lib/dates";
+import { shiftDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/format";
 import { workspaceStore } from "@/lib/workspaceStore";
 
+import { FIXED_NOW } from "../unit/clock";
 import { makeIntake, makeWorkspace, readStoredWorkspace } from "./fixtures";
 import { flushIdleCallbacks, preloadLazyChunks } from "./lazy";
 
-const localDatePlus = (days: number): string => {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return todayIso(() => date);
-};
+const localDatePlus = (days: number): string =>
+  shiftDate(FIXED_NOW.toISOString().slice(0, 10), days);
 
 vi.mock("@/lib/client", () => ({ requestRefinement: vi.fn() }));
 
@@ -112,7 +110,7 @@ describe("PlanWorkspace", () => {
   });
 
   it("switches panels by click", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     await renderWorkspace();
     await user.click(screen.getByRole("tab", { name: "Timeline" }));
     expect(screen.getByRole("heading", { name: /^Timeline to / })).toBeVisible();
@@ -125,14 +123,15 @@ describe("PlanWorkspace", () => {
   });
 
   it("switches panels with arrow keys", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     await renderWorkspace();
     screen.getByRole("tab", { name: "Budget" }).focus();
     await user.keyboard("{ArrowRight}");
     expect(screen.getByRole("tab", { name: "Timeline" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Timeline" })).toHaveFocus();
     expect(screen.getByRole("heading", { name: /^Timeline to / })).toBeVisible();
-    await user.keyboard("{ArrowRight}{ArrowRight}");
+    await user.keyboard("{ArrowRight}");
+    await user.keyboard("{ArrowRight}");
     expect(screen.getByRole("tab", { name: "Ideas" })).toHaveAttribute("aria-selected", "true");
     await user.keyboard("{ArrowRight}");
     expect(screen.getByRole("tab", { name: "Budget" })).toHaveAttribute("aria-selected", "true");
@@ -159,7 +158,7 @@ describe("PlanWorkspace", () => {
   });
 
   it("toggles a vendor, updates progress and persists", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     await renderWorkspace();
     await user.click(screen.getByRole("tab", { name: "Vendors" }));
     expect(screen.getByText("0 of 3 vendors booked")).toBeVisible();
@@ -176,7 +175,7 @@ describe("PlanWorkspace", () => {
   });
 
   it("includes the refine panel and applies/undoes a refinement", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const current = workspaceStore.getSnapshot().workspace!;
     const refined = {
       ...current.plan,
@@ -209,5 +208,31 @@ describe("PlanWorkspace", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Workspace" })).toBeVisible();
     expect(screen.getByRole("link", { name: "intake form" })).toHaveAttribute("href", "/");
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+  });
+
+  it("warns accessibly when the browser refuses to save a change, and clears once saved", async () => {
+    const user = userEvent.setup({ delay: null });
+    await renderWorkspace();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    await user.type(screen.getByRole("textbox", { name: "Category" }), "Lighting");
+    await user.click(screen.getByRole("button", { name: "Add line" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Changes could not be saved in this browser");
+    expect(within(alert).getByRole("link", { name: "printable summary" })).toHaveAttribute(
+      "href",
+      "/plan/summary",
+    );
+
+    setItem.mockRestore();
+    await user.click(screen.getByRole("button", { name: "Remove Lighting" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(readStoredWorkspace()?.plan.budget.map((line) => line.category)).toEqual([
+      "Venue",
+      "Catering",
+      "Decor",
+    ]);
   });
 });

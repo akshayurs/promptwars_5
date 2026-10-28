@@ -1,39 +1,32 @@
 "use client";
 
-import { useId, type ReactElement } from "react";
+import { memo, useId, type ReactElement } from "react";
 
 import { CalendarIcon, MapPinIcon, UsersIcon, WalletIcon } from "@/components/ui/Icons";
 import { CARD, EYEBROW, badgeClass } from "@/components/ui/styles";
-import { daysUntil } from "@/lib/dates";
-import { ADMISSION_LABELS, EVENT_TYPE_LABELS } from "@/lib/eventTypes";
-import { formatDate, formatMoney } from "@/lib/format";
+import { daysBetween, localTodayIso, systemClock, type Clock } from "@/lib/dates";
+import { detailsSummary, EVENT_TYPE_REGISTRY } from "@/lib/eventTypes";
+import { formatCount, formatDate, formatMoney } from "@/lib/format";
 import type { Intake } from "@/lib/schema";
 
 const countdownLabel = (days: number): string => {
-  if (days < 0) return "";
-  if (days === 0) return " (today)";
-  return days === 1 ? " (tomorrow)" : ` (${days} days away)`;
-};
-
-const ceremonyLabel = (style: string): string =>
-  /ceremony/i.test(style) ? style : `${style} ceremony`;
-
-const detailsSummary = (intake: Intake): string => {
-  switch (intake.eventType) {
-    case "wedding":
-      return `${intake.details.coupleNames} · ${ceremonyLabel(intake.details.ceremonyStyle)}`;
-    case "birthday":
-      return `${intake.details.honoreeName} turns ${intake.details.honoreeAge}`;
-    case "community": {
-      const admission = ADMISSION_LABELS[intake.details.admission];
-      const permit = intake.details.needsPermit ? "permit required" : "no permit needed";
-      return `${admission} admission · ${permit}`;
-    }
+  if (days < 0) {
+    return "";
   }
+  if (days === 0) {
+    return " (today)";
+  }
+  return days === 1 ? " (tomorrow)" : ` (${formatCount(days)} days away)`;
 };
 
-const FactList = ({ intake }: { intake: Intake }): ReactElement => {
-  const countdown = countdownLabel(daysUntil(intake.eventDate));
+type EventFactsProps = {
+  intake: Intake;
+  /** Source of "today" for the countdown; the planner's local calendar day is used. */
+  now?: Clock;
+};
+
+const FactList = ({ intake, now }: Required<EventFactsProps>): ReactElement => {
+  const countdown = countdownLabel(daysBetween(localTodayIso(now), intake.eventDate));
   const facts = [
     [
       "Date",
@@ -43,7 +36,7 @@ const FactList = ({ intake }: { intake: Intake }): ReactElement => {
       </>,
       CalendarIcon,
     ],
-    ["Guests", String(intake.guestCount), UsersIcon],
+    ["Guests", formatCount(intake.guestCount), UsersIcon],
     ["Budget", formatMoney(intake.totalBudget, intake.currency), WalletIcon],
     ["Location", intake.location, MapPinIcon],
   ] as const;
@@ -55,7 +48,7 @@ const FactList = ({ intake }: { intake: Intake }): ReactElement => {
             <Icon className="size-3.5 text-brand" />
             {term}
           </dt>
-          <dd className="font-semibold break-words">{detail}</dd>
+          <dd className="font-semibold wrap-anywhere">{detail}</dd>
         </div>
       ))}
     </dl>
@@ -71,7 +64,7 @@ const Brief = ({ intake }: { intake: Intake }): ReactElement => {
   return (
     <section
       aria-labelledby={headingId}
-      className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-muted p-4 text-sm sm:p-5"
+      className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-muted p-4 text-sm wrap-anywhere sm:p-5"
     >
       <h2 id={headingId} className={EYEBROW}>
         Your brief
@@ -90,10 +83,15 @@ const Brief = ({ intake }: { intake: Intake }): ReactElement => {
 };
 
 /** Event type badge, key facts and the brief the planner wrote. */
-export const EventFacts = ({ intake }: { intake: Intake }): ReactElement => (
-  <div className="flex flex-col gap-4">
-    <p className={badgeClass("brand")}>{EVENT_TYPE_LABELS[intake.eventType]}</p>
-    <FactList intake={intake} />
-    <Brief intake={intake} />
-  </div>
-);
+export const EventFacts = memo(function EventFacts({
+  intake,
+  now = systemClock,
+}: EventFactsProps): ReactElement {
+  return (
+    <div className="flex flex-col gap-4">
+      <p className={badgeClass("brand")}>{EVENT_TYPE_REGISTRY[intake.eventType].label}</p>
+      <FactList intake={intake} now={now} />
+      <Brief intake={intake} />
+    </div>
+  );
+});

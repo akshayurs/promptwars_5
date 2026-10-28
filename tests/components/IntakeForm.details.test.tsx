@@ -24,7 +24,7 @@ describe("IntakeForm event details", () => {
   });
 
   it("shows only the selected event type's details fieldset", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     const wedding = screen.getByRole("group", { name: "Wedding details" });
     expect(within(wedding).getByLabelText("Couple's names")).toBeRequired();
@@ -49,7 +49,7 @@ describe("IntakeForm event details", () => {
   });
 
   it("keeps typed details when switching away and back", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     await user.type(screen.getByLabelText("Couple's names"), "Asha and Ravi");
     await user.click(screen.getByRole("radio", { name: "Birthday" }));
@@ -58,7 +58,7 @@ describe("IntakeForm event details", () => {
   });
 
   it("submits the wedding details", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: makePlan() });
     render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
@@ -73,7 +73,7 @@ describe("IntakeForm event details", () => {
   });
 
   it("submits community details with a boolean permit flag", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: makePlan() });
     render(<IntakeForm flow={flow} />);
     await fillForm(user, futureDate(30));
@@ -90,7 +90,7 @@ describe("IntakeForm event details", () => {
   });
 
   it("does not submit details of a type that is no longer selected", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: makePlan() });
     render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
@@ -106,7 +106,7 @@ describe("IntakeForm event details", () => {
   });
 
   it.each(["0", "121", "7.5"])("rejects honoree age %s on the age field", async (age) => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     await fillForm(user, futureDate(30));
     await user.click(screen.getByRole("radio", { name: "Birthday" }));
@@ -121,7 +121,7 @@ describe("IntakeForm event details", () => {
   });
 
   it("flags a too-short couple name on that field", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     await fillForm(user, futureDate(30));
     await user.type(screen.getByLabelText("Couple's names"), "A");
@@ -133,7 +133,7 @@ describe("IntakeForm event details", () => {
   });
 
   it("maps nested server issues onto the details field", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mockedRequestPlan.mockResolvedValueOnce({
       ok: false,
       message: "Check your inputs",

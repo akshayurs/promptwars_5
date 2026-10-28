@@ -48,7 +48,7 @@ describe("IntakeForm cancellation", () => {
   });
 
   it("offers Cancel only while generating", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const resolve = pendingPlan();
     render(<IntakeForm flow={flow} />);
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
@@ -61,7 +61,7 @@ describe("IntakeForm cancellation", () => {
   });
 
   it("aborts the request, announces it, keeps the answers and ignores the late plan", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const resolve = pendingPlan();
     render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
@@ -87,7 +87,7 @@ describe("IntakeForm cancellation", () => {
   });
 
   it("can generate again after cancelling", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     pendingPlan();
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: makePlan() });
     render(<IntakeForm flow={flow} />);
@@ -115,7 +115,7 @@ describe("IntakeForm replacing a saved plan", () => {
     screen.getByRole("group", { name: "Replace your current plan?" });
 
   it("asks before replacing and moves focus to the question", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
     await submitForm(user);
@@ -125,7 +125,7 @@ describe("IntakeForm replacing a saved plan", () => {
   });
 
   it("keeps the current plan and returns focus to the submit button", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     await fillValidWedding(user);
     await submitForm(user);
@@ -137,7 +137,7 @@ describe("IntakeForm replacing a saved plan", () => {
   });
 
   it("replaces the plan once confirmed, sending the answers as they are now", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const plan = makePlan();
     mockedRequestPlan.mockResolvedValueOnce({ ok: true, value: plan });
     render(<IntakeForm flow={flow} />);
@@ -153,7 +153,7 @@ describe("IntakeForm replacing a saved plan", () => {
   });
 
   it("validates before asking and hides the question when the answers become invalid", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     await submitForm(user);
     expect(screen.queryByRole("group", { name: /Replace/ })).not.toBeInTheDocument();

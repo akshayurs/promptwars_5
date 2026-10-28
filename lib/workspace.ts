@@ -9,7 +9,8 @@ export type WorkspaceState = StoredWorkspace | null;
 export type WorkspaceAction =
   | { type: "replace"; workspace: WorkspaceState }
   | { type: "setAmount"; id: string; amount: number }
-  | { type: "addLine"; line: BudgetLine }
+  /** Inserts a line at `index` (appends when omitted), e.g. to restore a removed line. */
+  | { type: "addLine"; line: BudgetLine; index?: number | undefined }
   | { type: "removeLine"; id: string }
   | { type: "setTotalBudget"; amount: number }
   | { type: "toggleVendor"; id: string }
@@ -49,20 +50,22 @@ type PlanEdit = Extract<
   { type: "setAmount" | "addLine" | "removeLine" | "toggleVendor" | "toggleMilestone" }
 >;
 
+// Keeps the plan object when an edit leaves the section unchanged, so no-op actions stay no-ops.
+const withSection = <K extends keyof Plan>(plan: Plan, key: K, value: Plan[K]): Plan =>
+  value === plan[key] ? plan : { ...plan, [key]: value };
+
 const editPlan = (plan: Plan, action: PlanEdit): Plan => {
   switch (action.type) {
-    case "setAmount": {
-      const budget = updateLineAmount(plan.budget, action.id, action.amount);
-      return budget === plan.budget ? plan : { ...plan, budget };
-    }
+    case "setAmount":
+      return withSection(plan, "budget", updateLineAmount(plan.budget, action.id, action.amount));
     case "addLine":
-      return { ...plan, budget: addBudgetLine(plan.budget, action.line) };
+      return withSection(plan, "budget", addBudgetLine(plan.budget, action.line, action.index));
     case "removeLine":
-      return { ...plan, budget: removeBudgetLine(plan.budget, action.id) };
+      return withSection(plan, "budget", removeBudgetLine(plan.budget, action.id));
     case "toggleVendor":
-      return { ...plan, vendors: toggleVendor(plan.vendors, action.id) };
+      return withSection(plan, "vendors", toggleVendor(plan.vendors, action.id));
     case "toggleMilestone":
-      return { ...plan, timeline: toggleMilestone(plan.timeline, action.id) };
+      return withSection(plan, "timeline", toggleMilestone(plan.timeline, action.id));
   }
 };
 
@@ -81,13 +84,18 @@ const edit = (state: StoredWorkspace, action: PlanEdit, now: IsoClock): StoredWo
 
 /**
  * Pure workspace reducer. Actions that change nothing (an invalid or unchanged total, an
- * unchanged amount, undo with no history) return the same state object, so callers can skip work.
+ * unchanged amount, a line or toggle that does not apply, undo with no history) return the same
+ * state object, so callers can skip work.
  */
 export const createWorkspaceReducer =
   (now: IsoClock = isoNow) =>
   (state: WorkspaceState, action: WorkspaceAction): WorkspaceState => {
-    if (action.type === "replace") return action.workspace;
-    if (state === null) return state;
+    if (action.type === "replace") {
+      return action.workspace;
+    }
+    if (state === null) {
+      return state;
+    }
     switch (action.type) {
       case "applyPlan":
         return touch(state, { plan: action.plan, previousPlan: state.plan }, now);

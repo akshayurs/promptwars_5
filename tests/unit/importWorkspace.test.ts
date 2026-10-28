@@ -1,24 +1,42 @@
 import { describe, expect, it } from "vitest";
 
 import { LIMITS, WORKSPACE_VERSION } from "@/lib/constants";
-import { IMPORT_MESSAGES, parseWorkspaceImport, readWorkspaceImport } from "@/lib/importWorkspace";
+import { readWorkspaceImport, type ImportResult } from "@/lib/importWorkspace";
 
 import { makeWorkspace } from "./fixtures";
 
+const IMPORT_MESSAGES = {
+  tooLarge: "Choose a file smaller than 256 KB.",
+  unreadable: "This file could not be read. Try choosing it again.",
+  notJson: "This file is not valid JSON. Choose a plan you exported from EventCraft.",
+  wrongShape:
+    "This file is not an EventCraft plan, or it was exported by an older version of the app.",
+};
+
 const fileOf = (text: string): Blob => new Blob([text], { type: "application/json" });
 
-describe("parseWorkspaceImport", () => {
-  it("accepts an exported workspace, pretty-printed as the summary page writes it", () => {
+// Hands the text over verbatim (Blob.text() would strip a leading byte order mark).
+const parseWorkspaceImport = (text: string): Promise<ImportResult> =>
+  readWorkspaceImport({ size: text.length, text: () => Promise.resolve(text) });
+
+describe("readWorkspaceImport validation", () => {
+  it("accepts an exported workspace, pretty-printed as the summary page writes it", async () => {
     const workspace = makeWorkspace();
-    expect(parseWorkspaceImport(JSON.stringify(workspace, null, 2))).toEqual({
+    await expect(parseWorkspaceImport(JSON.stringify(workspace, null, 2))).resolves.toEqual({
       ok: true,
       workspace,
     });
   });
 
-  it.each(["", "{", "not json", "{'version': 2}", "﻿{}"])("rejects malformed JSON %j", (text) => {
-    expect(parseWorkspaceImport(text)).toEqual({ ok: false, message: IMPORT_MESSAGES.notJson });
-  });
+  it.each(["", "{", "not json", "{'version': 2}", "﻿{}"])(
+    "rejects malformed JSON %j",
+    async (text) => {
+      await expect(parseWorkspaceImport(text)).resolves.toEqual({
+        ok: false,
+        message: IMPORT_MESSAGES.notJson,
+      });
+    },
+  );
 
   it.each([
     ["null", null],
@@ -27,21 +45,21 @@ describe("parseWorkspaceImport", () => {
     ["an older version", { ...makeWorkspace(), version: WORKSPACE_VERSION - 1 }],
     ["an unknown key", { ...makeWorkspace(), owner: "someone" }],
     ["a malformed timestamp", { ...makeWorkspace(), savedAt: "yesterday" }],
-  ])("rejects %s", (_label, value) => {
-    expect(parseWorkspaceImport(JSON.stringify(value))).toEqual({
+  ])("rejects %s", async (_label, value) => {
+    await expect(parseWorkspaceImport(JSON.stringify(value))).resolves.toEqual({
       ok: false,
       message: IMPORT_MESSAGES.wrongShape,
     });
   });
 
-  it("rejects a plan whose budget exceeds the schema limits", () => {
+  it("rejects a plan whose budget exceeds the schema limits", async () => {
     const workspace = makeWorkspace();
     const tooMany = Array.from(
       { length: LIMITS.budgetLines.max + 1 },
       () => workspace.plan.budget[0],
     );
     const text = JSON.stringify({ ...workspace, plan: { ...workspace.plan, budget: tooMany } });
-    expect(parseWorkspaceImport(text)).toMatchObject({ ok: false });
+    await expect(parseWorkspaceImport(text)).resolves.toMatchObject({ ok: false });
   });
 });
 
@@ -74,10 +92,6 @@ describe("readWorkspaceImport", () => {
     const text = " ".repeat(LIMITS.importFileBytes);
     const result = await readWorkspaceImport(fileOf(text));
     expect(result).toEqual({ ok: false, message: IMPORT_MESSAGES.notJson });
-  });
-
-  it("states the size cap in kilobytes", () => {
-    expect(IMPORT_MESSAGES.tooLarge).toBe("Choose a file smaller than 256 KB.");
   });
 
   it("reports a file the browser cannot read", async () => {

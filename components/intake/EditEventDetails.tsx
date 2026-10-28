@@ -9,11 +9,10 @@ import { CARD_PADDED, PAGE_TITLE, TEXT_LINK } from "@/components/ui/styles";
 import { useWorkspace } from "@/components/useWorkspace";
 import { useHeadingFocus } from "@/components/useHeadingFocus";
 import { EmptyWorkspace, LoadingNotice } from "@/components/WorkspaceStates";
+import { PAGE_TITLES } from "@/lib/messages";
 import type { StoredWorkspace } from "@/lib/schema";
 
 import { editPlanFlow } from "./intakeFlows";
-
-const TITLE = "Edit event details";
 
 const EditForm = ({ workspace }: { workspace: StoredWorkspace }): ReactElement => {
   const headingRef = useHeadingFocus();
@@ -21,9 +20,9 @@ const EditForm = ({ workspace }: { workspace: StoredWorkspace }): ReactElement =
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <header className="flex flex-col gap-3">
         <h1 ref={headingRef} tabIndex={-1} className={PAGE_TITLE}>
-          {TITLE}
+          {PAGE_TITLES.editDetails}
         </h1>
-        <p className="text-lg text-pretty text-ink-muted">
+        <p className="text-lg text-pretty wrap-anywhere text-ink-muted">
           Change the details of {workspace.intake.eventName} and Gemini adapts the plan to them.
           Checked milestones and booked vendors carry over where they still apply.
         </p>
@@ -36,7 +35,7 @@ const EditForm = ({ workspace }: { workspace: StoredWorkspace }): ReactElement =
         </Link>
       </header>
       <div className={CARD_PADDED}>
-        <IntakeForm flow={editPlanFlow(workspace.plan)} initial={workspace.intake} />
+        <IntakeForm flow={editPlanFlow(workspace)} initial={workspace.intake} />
       </div>
     </div>
   );
@@ -45,7 +44,11 @@ const EditForm = ({ workspace }: { workspace: StoredWorkspace }): ReactElement =
 /** Edits the saved event details and adapts the plan to them. */
 export const EditEventDetails = (): ReactElement => {
   const { workspace, status } = useWorkspace();
-  if (status === "loading") return <LoadingNotice title={TITLE} />;
-  if (!workspace) return <EmptyWorkspace title={TITLE} />;
+  if (status === "loading") {
+    return <LoadingNotice title={PAGE_TITLES.editDetails} />;
+  }
+  if (!workspace) {
+    return <EmptyWorkspace title={PAGE_TITLES.editDetails} />;
+  }
   return <EditForm workspace={workspace} />;
 };

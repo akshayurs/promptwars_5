@@ -118,19 +118,20 @@ body {
   outline-offset: 2px;
 }
 
+/* The track is outlined in --control (3:1 against every surface) so the unfilled part stays visible. */
 progress {
   appearance: none;
-  height: 0.5rem;
+  height: 0.625rem;
   width: 100%;
   overflow: hidden;
-  border: 0;
+  border: 1px solid var(--control);
   border-radius: 9999px;
-  background: var(--surface-muted);
+  background: var(--surface-raised);
   accent-color: var(--brand);
 }
 
 progress::-webkit-progress-bar {
-  background: var(--surface-muted);
+  background: var(--surface-raised);
   border-radius: 9999px;
 }
 
@@ -172,10 +173,6 @@ details > summary::-webkit-details-marker {
 @media (forced-colors: active) {
   :focus-visible {
     outline-color: Highlight;
-  }
-  [aria-current="page"] {
-    text-decoration: underline 2px;
-    text-underline-offset: 0.3em;
   }
   [role="tab"] {
     border-bottom-color: Canvas;

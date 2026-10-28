@@ -2,14 +2,16 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Timeline } from "@/components/Timeline";
-import { shiftDate, todayIso } from "@/lib/dates";
+import { shiftDate } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import type { Milestone } from "@/lib/schema";
 
+import { FIXED_NOW } from "../unit/clock";
 import { makePlan } from "./fixtures";
 import { preloadLazyChunks } from "./lazy";
 
 const EVENT_DATE = "2030-06-15";
+const FIXED_TODAY = FIXED_NOW.toISOString().slice(0, 10);
 
 const milestone = (overrides: Partial<Milestone>): Milestone => ({
   id: crypto.randomUUID(),
@@ -92,7 +94,9 @@ describe("Timeline", () => {
   it("uses ordered lists", () => {
     render(<Timeline timeline={makePlan().timeline} eventDate={EVENT_DATE} />);
     expect(screen.getAllByRole("list")).toHaveLength(4);
-    for (const list of screen.getAllByRole("list")) expect(list.tagName).toBe("OL");
+    for (const list of screen.getAllByRole("list")) {
+      expect(list.tagName).toBe("OL");
+    }
   });
 
   it("renders milestone details", () => {
@@ -159,7 +163,7 @@ describe("Timeline interactive mode", () => {
   });
 
   it("flags open milestones as Overdue or Due this week relative to today", async () => {
-    const eventDate = shiftDate(todayIso(), 10);
+    const eventDate = shiftDate(FIXED_TODAY, 10);
     const timeline = [
       milestone({ title: "Late", daysBeforeEvent: 12 }),
       milestone({ title: "Late but done", daysBeforeEvent: 11, done: true }),
@@ -205,5 +209,22 @@ describe("Timeline read-only mode", () => {
     expect(second).toHaveAccessibleName(`Timeline to ${formatDate(EVENT_DATE)}`);
     expect(screen.getByRole("progressbar", { name: "0 of 1 milestones done" })).toBeVisible();
     expect(screen.getByRole("progressbar", { name: "1 of 1 milestones done" })).toBeVisible();
+  });
+
+  it("uses the planner's local calendar day from the injected clock", async () => {
+    const eventDate = "2031-01-11";
+    // 20:00 UTC on 31 Dec is already 1 Jan for a planner east of UTC.
+    const eastOfUtc = (): Date =>
+      Object.assign(new Date("2030-12-31T20:00:00Z"), {
+        getFullYear: () => 2031,
+        getMonth: () => 0,
+        getDate: () => 1,
+      });
+    const timeline = [milestone({ title: "Book the band", daysBeforeEvent: 11 })];
+    render(
+      <Timeline timeline={timeline} eventDate={eventDate} onToggle={vi.fn()} now={eastOfUtc} />,
+    );
+    const item = (await screen.findByRole("checkbox", { name: "Book the band" })).closest("li");
+    expect(item).toHaveTextContent("Overdue");
   });
 });

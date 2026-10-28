@@ -1,9 +1,11 @@
+"use client";
+
 import { useId, type ReactElement } from "react";
 
-import { bindToggle, CheckControl } from "@/components/ui/CheckControl";
+import { bindToggle, CheckControl, type Toggle } from "@/components/ui/CheckControl";
 import { ChevronDownIcon } from "@/components/ui/Icons";
-import { CARD, SECTION_HEADING } from "@/components/ui/styles";
-import type { Toggle } from "@/components/workspace/types";
+import { ProgressHeader } from "@/components/ui/ProgressHeader";
+import { CARD } from "@/components/ui/styles";
 import type { Vendor } from "@/lib/schema";
 import { vendorProgress } from "@/lib/vendors";
 
@@ -56,6 +58,9 @@ const VendorBody = ({ vendor, onToggle }: VendorItemProps): ReactElement => {
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <VendorName vendor={vendor} controlId={onToggle ? id : null} />
         <p className="text-sm leading-relaxed text-ink-muted">{vendor.whyNeeded}</p>
+        {vendor.budgetCategory ? (
+          <p className="text-sm text-ink-muted">{`Budget: ${vendor.budgetCategory}`}</p>
+        ) : null}
         <VendorQuestions vendor={vendor} />
       </div>
     </div>
@@ -63,26 +68,18 @@ const VendorBody = ({ vendor, onToggle }: VendorItemProps): ReactElement => {
 };
 
 export const VendorChecklist = ({ vendors, onToggle }: VendorChecklistProps): ReactElement => {
-  const progress = vendorProgress(vendors);
   const id = useId();
   return (
     <section aria-labelledby={`${id}-heading`} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <h2 id={`${id}-heading`} className={SECTION_HEADING}>
-          Vendor checklist
-        </h2>
-        <p id={`${id}-progress`} role="status" className="text-sm font-medium text-ink-muted">
-          {progress.booked} of {progress.total} vendors booked
-        </p>
-        <progress
-          aria-labelledby={`${id}-progress`}
-          value={progress.booked}
-          max={Math.max(progress.total, 1)}
-        />
-      </div>
+      <ProgressHeader
+        id={id}
+        heading="Vendor checklist"
+        progress={vendorProgress(vendors)}
+        unit="vendors booked"
+      />
       <ul className="flex flex-col gap-3">
         {vendors.map((vendor) => (
-          <li key={vendor.id} className={`${CARD} break-inside-avoid p-4 sm:p-5`}>
+          <li key={vendor.id} className={`${CARD} break-inside-avoid p-4 wrap-anywhere sm:p-5`}>
             <VendorBody vendor={vendor} onToggle={onToggle} />
           </li>
         ))}

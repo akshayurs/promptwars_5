@@ -4,16 +4,15 @@ export const CARD = "rounded-2xl border border-line bg-surface-raised shadow-car
 export const CARD_PADDED = `${CARD} p-5 sm:p-6`;
 
 export const PAGE_TITLE =
-  "text-3xl font-semibold tracking-tight text-balance focus:outline-none sm:text-4xl";
+  "text-3xl font-semibold tracking-tight text-balance wrap-anywhere focus:outline-none sm:text-4xl";
 
 export const SECTION_HEADING = "text-lg font-semibold tracking-tight";
 
 export const EYEBROW = "text-xs font-semibold uppercase tracking-wider text-ink-muted";
 
-type BadgeTone = "neutral" | "brand" | "success" | "warning" | "danger";
+type BadgeTone = "brand" | "success" | "warning" | "danger";
 
 const BADGE_TONES: Record<BadgeTone, string> = {
-  neutral: "border-line bg-surface-muted text-ink",
   brand: "border-brand bg-brand-soft text-brand",
   success: "border-success bg-success-soft text-success",
   warning: "border-warning bg-warning-soft text-warning",

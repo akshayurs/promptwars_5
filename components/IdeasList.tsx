@@ -1,3 +1,5 @@
+"use client";
+
 import { useId, type ReactElement } from "react";
 
 import { IconBadge } from "@/components/ui/IconBadge";
@@ -18,7 +20,7 @@ export const IdeasList = ({ ideas }: IdeasListProps): ReactElement => {
         {ideas.map((idea) => (
           <li
             key={idea.id}
-            className={`${CARD} flex break-inside-avoid flex-col gap-3 p-5 transition-colors hover:border-brand/40`}
+            className={`${CARD} flex break-inside-avoid flex-col gap-3 p-5 wrap-anywhere transition-colors hover:border-brand/40`}
           >
             <IconBadge>
               <BulbIcon />

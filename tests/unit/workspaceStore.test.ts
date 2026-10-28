@@ -11,7 +11,11 @@ const reducer = createWorkspaceReducer(() => "2031-01-01T00:00:00.000Z");
 describe("createWorkspaceStore", () => {
   it("server snapshot is always loading", () => {
     const store = createWorkspaceStore(() => makeMemoryStorage(), reducer);
-    expect(store.getServerSnapshot()).toEqual({ status: "loading", workspace: null });
+    expect(store.getServerSnapshot()).toEqual({
+      status: "loading",
+      workspace: null,
+      saveFailed: false,
+    });
     expect(store.getServerSnapshot()).toBe(store.getServerSnapshot());
   });
 
@@ -23,7 +27,7 @@ describe("createWorkspaceStore", () => {
     const store = createWorkspaceStore(() => storage, reducer);
     expect(getItem).not.toHaveBeenCalled();
     const first = store.getSnapshot();
-    expect(first).toEqual({ status: "ready", workspace: ws });
+    expect(first).toEqual({ status: "ready", workspace: ws, saveFailed: false });
     expect(store.getSnapshot()).toBe(first);
     expect(getItem).toHaveBeenCalledTimes(1);
   });
@@ -32,6 +36,7 @@ describe("createWorkspaceStore", () => {
     expect(createWorkspaceStore(() => makeMemoryStorage(), reducer).getSnapshot()).toEqual({
       status: "ready",
       workspace: null,
+      saveFailed: false,
     });
     expect(createWorkspaceStore(() => null, reducer).getSnapshot().workspace).toBeNull();
   });
@@ -121,6 +126,32 @@ describe("createWorkspaceStore", () => {
     store.dispatch({ type: "replace", workspace: null });
     expect(storage.getItem(STORAGE_KEY)).toBeNull();
     expect(store.getSnapshot().workspace).toBeNull();
+  });
+
+  it("flags a write the browser refuses and clears the flag once a write succeeds", () => {
+    const storage = makeMemoryStorage();
+    const store = createWorkspaceStore(() => storage, reducer);
+    const listener = vi.fn();
+    store.subscribe(listener);
+    const setItem = vi.spyOn(storage, "setItem").mockImplementationOnce(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    const ws = makeWorkspace();
+    store.dispatch({ type: "replace", workspace: ws });
+    expect(store.getSnapshot()).toEqual({ status: "ready", workspace: ws, saveFailed: true });
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    store.dispatch({ type: "toggleVendor", id: ws.plan.vendors[0]!.id });
+    expect(setItem).toHaveBeenCalledTimes(2);
+    expect(store.getSnapshot().saveFailed).toBe(false);
+  });
+
+  it("flags every write when storage is unavailable, but never clearing the plan", () => {
+    const store = createWorkspaceStore(() => null, reducer);
+    store.dispatch({ type: "replace", workspace: makeWorkspace() });
+    expect(store.getSnapshot().saveFailed).toBe(true);
+    store.dispatch({ type: "replace", workspace: null });
+    expect(store.getSnapshot().saveFailed).toBe(false);
   });
 
   it("exposes a default browser-backed store", () => {
@@ -240,6 +271,37 @@ describe("createWorkspaceStore debounced persistence", () => {
     setVisibility("hidden");
     document.dispatchEvent(new Event("visibilitychange"));
     expect(setItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a refused deferred write and its later recovery to subscribers", () => {
+    const { store, setItem, lineId } = setup();
+    const listener = vi.fn();
+    store.subscribe(listener);
+    setItem.mockImplementationOnce(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    store.dispatch({ type: "setAmount", id: lineId, amount: 6 });
+    expect(store.getSnapshot().saveFailed).toBe(false);
+    vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS);
+    expect(store.getSnapshot().saveFailed).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    store.dispatch({ type: "setAmount", id: lineId, amount: 8 });
+    expect(store.getSnapshot().saveFailed).toBe(true);
+    vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS);
+    expect(store.getSnapshot().saveFailed).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not notify when a deferred write keeps the save state unchanged", () => {
+    const { store, lineId } = setup();
+    const listener = vi.fn();
+    store.subscribe(listener);
+    store.dispatch({ type: "setAmount", id: lineId, amount: 6 });
+    const before = store.getSnapshot();
+    vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS);
+    expect(store.getSnapshot()).toBe(before);
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it("drops a pending write when another tab saves a newer plan", () => {

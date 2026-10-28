@@ -5,12 +5,7 @@ import { useState, type ChangeEvent } from "react";
 import { sanitizeAmount } from "@/lib/budget";
 import { LIMITS } from "@/lib/constants";
 import { formatMoney } from "@/lib/format";
-
-import type { Currency } from "./types";
-
-/** Whether a line amount is a finite number from 0 to the supported maximum. */
-export const isValidLineAmount = (amount: number): boolean =>
-  Number.isFinite(amount) && amount >= 0 && amount <= LIMITS.maxBudget;
+import type { Currency } from "@/lib/types";
 
 export const lineAmountError = (currency: Currency): string =>
   `Enter an amount from ${formatMoney(0, currency)} to ${formatMoney(LIMITS.maxBudget, currency)}.`;
@@ -43,10 +38,14 @@ export const useAmountDraft = (
     onChange: (event) => {
       setDraft(event.target.value);
       const raw = event.target.valueAsNumber;
-      if (isValid(raw)) onCommit(sanitizeAmount(raw, LIMITS.maxBudget));
+      if (isValid(raw)) {
+        onCommit(sanitizeAmount(raw, LIMITS.maxBudget));
+      }
     },
     onBlur: () => {
-      if (!invalid) setDraft(null);
+      if (!invalid) {
+        setDraft(null);
+      }
     },
   };
 };

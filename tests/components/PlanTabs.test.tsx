@@ -16,7 +16,7 @@ const setup = async () => {
   const dispatch = vi.fn();
   render(<PlanTabs workspace={workspace} dispatch={dispatch} />);
   await screen.findByRole("button", { name: "Add line" });
-  return { workspace, dispatch, user: userEvent.setup() };
+  return { workspace, dispatch, user: userEvent.setup({ delay: null }) };
 };
 
 describe("PlanTabs", () => {
@@ -70,5 +70,14 @@ describe("PlanTabs", () => {
       type: "toggleVendor",
       id: workspace.plan.vendors[1]!.id,
     });
+  });
+
+  it("restores a removed line at its position through Undo", async () => {
+    const { workspace, dispatch, user } = await setup();
+    const removed = workspace.plan.budget[1]!;
+    await user.click(screen.getByRole("button", { name: `Remove ${removed.category}` }));
+    expect(dispatch).toHaveBeenLastCalledWith({ type: "removeLine", id: removed.id });
+    await user.click(screen.getByRole("button", { name: `Undo removing ${removed.category}` }));
+    expect(dispatch).toHaveBeenLastCalledWith({ type: "addLine", line: removed, index: 1 });
   });
 });

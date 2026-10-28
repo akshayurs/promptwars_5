@@ -1,7 +1,7 @@
 import type { PendingTexts } from "@/components/usePendingRequest";
 import { requestPlan, requestRefinement, type ApiResult } from "@/lib/client";
 import { buildAdaptRequest } from "@/lib/intakeEdit";
-import type { Intake, Plan } from "@/lib/schema";
+import type { Intake, Plan, StoredWorkspace } from "@/lib/schema";
 import { createWorkspace } from "@/lib/workspace";
 import { workspaceStore, type WorkspaceStore } from "@/lib/workspaceStore";
 
@@ -9,7 +9,8 @@ import { workspaceStore, type WorkspaceStore } from "@/lib/workspaceStore";
 export type IntakeFlow = {
   copy: PendingTexts & { submit: string; busy: string };
   send: (intake: Intake, signal: AbortSignal) => Promise<ApiResult<Plan>>;
-  save: (intake: Intake, plan: Plan) => void;
+  /** Saves the result; false when the saved plan changed meanwhile and nothing was written. */
+  save: (intake: Intake, plan: Plan) => boolean;
   /** Name of the saved plan a submission would replace, or null when nothing is replaced. */
   replaces: () => string | null;
 };
@@ -48,19 +49,34 @@ export const createPlanFlow = (overrides: Partial<FlowDeps> = {}): IntakeFlow =>
     send,
     save: (intake, plan) => {
       store.dispatch({ type: "replace", workspace: createWorkspace(intake, plan) });
+      return true;
     },
     replaces: () => store.getSnapshot().workspace?.intake.eventName ?? null,
   };
 };
 
-/** Adapts the current plan to edited event details through the refine endpoint. */
-export const editPlanFlow = (plan: Plan, overrides: Partial<FlowDeps> = {}): IntakeFlow => {
+/** Message shown when the saved plan changed while an edit was being adapted. */
+export const STALE_EDIT_MESSAGE =
+  "The plan changed while your details were being applied, so nothing was saved. Try again.";
+
+/**
+ * Adapts the saved plan to edited event details through the refine endpoint. The result is only
+ * saved if the plan is still the one the request was built from (its `savedAt` is unchanged).
+ */
+export const editPlanFlow = (
+  { plan, savedAt }: Pick<StoredWorkspace, "plan" | "savedAt">,
+  overrides: Partial<FlowDeps> = {},
+): IntakeFlow => {
   const { store, requestRefinement: refine } = { ...DEFAULT_DEPS, ...overrides };
   return {
     copy: EDIT_COPY,
     send: (intake, signal) => refine(buildAdaptRequest(intake, plan), signal),
     save: (intake, next) => {
+      if (store.getSnapshot().workspace?.savedAt !== savedAt) {
+        return false;
+      }
       store.dispatch({ type: "updateIntake", intake, plan: next });
+      return true;
     },
     replaces: () => null,
   };

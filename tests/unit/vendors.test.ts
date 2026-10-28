@@ -14,17 +14,22 @@ describe("toggleVendor", () => {
     expect(target.booked).toBe(false);
     expect(toggleVendor(next, target.id)[0]?.booked).toBe(false);
   });
+
+  it("returns the same array for an unknown id", () => {
+    const { vendors } = makePlan();
+    expect(toggleVendor(vendors, "missing")).toBe(vendors);
+  });
 });
 
 describe("vendorProgress", () => {
   it("returns zeros for an empty list", () => {
-    expect(vendorProgress([])).toEqual({ booked: 0, total: 0, ratio: 0 });
+    expect(vendorProgress([])).toEqual({ done: 0, total: 0, ratio: 0 });
   });
 
   it("counts booked vendors", () => {
     const { vendors } = makePlan();
     const progress = vendorProgress([{ ...vendors[0]!, booked: true }, ...vendors.slice(1)]);
-    expect(progress.booked).toBe(1);
+    expect(progress.done).toBe(1);
     expect(progress.total).toBe(3);
     expect(progress.ratio).toBeCloseTo(1 / 3);
   });

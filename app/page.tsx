@@ -53,10 +53,11 @@ export default function HomePage(): ReactElement {
           ))}
         </ul>
       </section>
-      <ExistingPlanNotice />
       <div className={CARD_PADDED}>
         <IntakeForm />
       </div>
+      {/* Below the form: it appears only after hydration, so it must not push visible content. */}
+      <ExistingPlanNotice />
       <ImportPlan />
     </div>
   );

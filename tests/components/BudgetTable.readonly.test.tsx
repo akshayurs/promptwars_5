@@ -26,7 +26,7 @@ describe("BudgetTable (read-only)", () => {
   it("shows the allocated total in the footer", () => {
     render(<BudgetTable lines={lines} totalBudget={500_000} currency="INR" />);
     const footerRow = screen.getAllByRole("row").at(-1);
-    expect(footerRow).toBeDefined();
+    expect(footerRow).toBeInstanceOf(HTMLTableRowElement);
     expect(within(footerRow!).getByText(formatMoney(400_000, "INR"))).toBeInTheDocument();
     expect(
       within(footerRow!).getByRole("rowheader", {
@@ -42,11 +42,9 @@ describe("BudgetTable (read-only)", () => {
     expect(screen.getByText("80% of budget allocated")).toBeInTheDocument();
   });
 
-  it("warns with the overage when over budget", () => {
+  it("warns with the overage when over budget, without announcing on first render", () => {
     render(<BudgetTable lines={lines} totalBudget={300_000} currency="USD" />);
-    expect(screen.getByRole("status")).toHaveTextContent(
-      `Over budget by ${formatMoney(100_000, "USD")}`,
-    );
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
     expect(screen.getByRole("status")).toHaveClass("sr-only");
     expect(screen.getByText("Over budget")).toBeInTheDocument();
     expect(

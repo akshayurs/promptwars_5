@@ -16,7 +16,8 @@ export const createLogger = (
   now: () => Date = () => new Date(),
 ): Logger => {
   const emit = (level: Level, message: string, fields: Fields = {}): void => {
-    sink(JSON.stringify({ time: now().toISOString(), level, message, ...fields }));
+    // Reserved keys are written last so no field can overwrite them.
+    sink(JSON.stringify({ ...fields, time: now().toISOString(), level, message }));
   };
   return {
     info: (message: string, fields?: Fields): void => {

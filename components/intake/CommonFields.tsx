@@ -3,11 +3,12 @@
 import { useSyncExternalStore, type ReactElement } from "react";
 
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
-import { CURRENCIES, LIMITS } from "@/lib/constants";
+import { CURRENCIES, LIMITS, MONEY_STEP } from "@/lib/constants";
 import { shiftDate, todayIso } from "@/lib/dates";
 
-import { FIELD_LABELS } from "./fieldLabels";
-import { errorFor, type FieldsProps } from "./formState";
+import { CURRENCY_NAMES, FIELD_LABELS } from "./fieldLabels";
+import { errorFor } from "./fieldIssues";
+import type { FieldsProps } from "./formValues";
 
 const noSubscription = (): (() => void) => () => undefined;
 const serverMinimum = (): undefined => undefined;
@@ -58,8 +59,9 @@ export const LogisticsFields = ({ values, issues, onChange }: FieldsProps): Reac
       label={FIELD_LABELS.totalBudget}
       type="number"
       inputMode="decimal"
-      min={1}
+      min={MONEY_STEP}
       max={LIMITS.maxBudget}
+      step={MONEY_STEP}
       value={values.totalBudget}
       onChange={onChange("totalBudget")}
       required
@@ -70,7 +72,10 @@ export const LogisticsFields = ({ values, issues, onChange }: FieldsProps): Reac
       label={FIELD_LABELS.currency}
       value={values.currency}
       onChange={onChange("currency")}
-      options={CURRENCIES.map((code) => ({ value: code, label: code }))}
+      options={CURRENCIES.map((code) => ({
+        value: code,
+        label: `${code} – ${CURRENCY_NAMES[code]}`,
+      }))}
     />
   </div>
 );

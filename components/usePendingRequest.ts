@@ -22,7 +22,9 @@ export type PendingRequest = {
 const useLongWait = (pending: boolean): boolean => {
   const [elapsed, setElapsed] = useState(false);
   useEffect(() => {
-    if (!pending) return undefined;
+    if (!pending) {
+      return undefined;
+    }
     const timer = setTimeout(() => {
       setElapsed(true);
     }, LONG_WAIT_NOTICE_MS);
@@ -37,7 +39,9 @@ const useLongWait = (pending: boolean): boolean => {
 type Progress = { busy: boolean; longWait: boolean; cancelled: boolean };
 
 const statusTextFor = (texts: PendingTexts, { busy, longWait, cancelled }: Progress): string => {
-  if (busy) return longWait ? texts.longWait : texts.pending;
+  if (busy) {
+    return longWait ? texts.longWait : texts.pending;
+  }
   return cancelled ? texts.cancelled : "";
 };
 
@@ -68,7 +72,9 @@ export const usePendingRequest = (texts: PendingTexts): PendingRequest => {
   };
 
   const settle = (signal: AbortSignal): boolean => {
-    if (signal.aborted) return false;
+    if (signal.aborted) {
+      return false;
+    }
     controllerRef.current = null;
     setBusy(false);
     return true;

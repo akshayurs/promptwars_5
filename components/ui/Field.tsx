@@ -1,10 +1,4 @@
-import type {
-  ComponentPropsWithRef,
-  ReactElement,
-  ReactNode,
-  SelectHTMLAttributes,
-  TextareaHTMLAttributes,
-} from "react";
+import type { ComponentPropsWithRef, ReactElement, ReactNode, SelectHTMLAttributes } from "react";
 
 import { ChevronDownIcon } from "@/components/ui/Icons";
 
@@ -71,7 +65,7 @@ export const TextAreaField = ({
   hint,
   error,
   ...textarea
-}: Meta & TextareaHTMLAttributes<HTMLTextAreaElement>): ReactElement => (
+}: Meta & ComponentPropsWithRef<"textarea">): ReactElement => (
   <FieldShell id={id} label={label} {...(hint ? { hint } : {})} {...(error ? { error } : {})}>
     {(describedBy, invalid) => (
       <textarea

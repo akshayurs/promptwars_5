@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState, type ReactElement } from "react";
 
 import { BudgetTable } from "@/components/BudgetTable";
-import { LIMITS } from "@/lib/constants";
+import { LIMITS, MONEY_STEP } from "@/lib/constants";
 import { formatMoney } from "@/lib/format";
 
 import { budgetLines as lines } from "./budgetTableHelpers";
@@ -80,5 +81,36 @@ describe("BudgetTable (editable total)", () => {
     expect(screen.getByText("50% of budget allocated")).toBeInTheDocument();
     expect(screen.getByText(`${formatMoney(400_000, "INR")} still unallocated.`)).toBeVisible();
     expect(screen.getByLabelText("Total budget (INR)")).toHaveValue(800_000);
+  });
+
+  it("announces only crossings into and out of over budget, not every keystroke", () => {
+    const { input } = renderTotal();
+    const status = screen.getByRole("status");
+    expect(status).toBeEmptyDOMElement();
+    const Stateful = (): ReactElement => {
+      const [total, setTotal] = useState(500_000);
+      return (
+        <BudgetTable lines={lines} totalBudget={total} currency="INR" onTotalChange={setTotal} />
+      );
+    };
+    cleanup();
+    render(<Stateful />);
+    const field = screen.getByLabelText("Total budget (INR)");
+    const live = screen.getByRole("status");
+    fireEvent.change(field, { target: { value: "300000" } });
+    expect(live).toHaveTextContent(`Over budget by ${formatMoney(100_000, "INR")}.`);
+    fireEvent.change(field, { target: { value: "350000" } });
+    expect(live).toHaveTextContent(`Over budget by ${formatMoney(100_000, "INR")}.`);
+    fireEvent.change(field, { target: { value: "450000" } });
+    expect(live).toHaveTextContent("Within budget.");
+    fireEvent.change(field, { target: { value: "460000" } });
+    expect(live).toHaveTextContent("Within budget.");
+    expect(input).not.toBeInTheDocument();
+  });
+
+  it("uses one minor unit as the minimum and step of the total", () => {
+    const { input } = renderTotal();
+    expect(input).toHaveAttribute("min", String(MONEY_STEP));
+    expect(input).toHaveAttribute("step", String(MONEY_STEP));
   });
 });

@@ -13,8 +13,12 @@ const UNSUPPORTED_KEYWORDS: ReadonlySet<string> = new Set([
 ]);
 
 const stripKeywords = (node: unknown, isPropertyMap = false): unknown => {
-  if (Array.isArray(node)) return node.map((item) => stripKeywords(item));
-  if (typeof node !== "object" || node === null) return node;
+  if (Array.isArray(node)) {
+    return node.map((item) => stripKeywords(item));
+  }
+  if (typeof node !== "object" || node === null) {
+    return node;
+  }
   return Object.fromEntries(
     Object.entries(node)
       .filter(([key]) => isPropertyMap || !UNSUPPORTED_KEYWORDS.has(key))

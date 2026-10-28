@@ -3,11 +3,14 @@ import { renderToString } from "react-dom/server";
 import userEvent from "@testing-library/user-event";
 
 import { EditEventDetails } from "@/components/intake/EditEventDetails";
+import { STALE_EDIT_MESSAGE } from "@/components/intake/intakeFlows";
 import { requestRefinement, type ApiResult } from "@/lib/client";
+import { SECOND_MS } from "@/lib/constants";
 import { buildAdaptRequest } from "@/lib/intakeEdit";
 import type { Plan } from "@/lib/schema";
 import { workspaceStore } from "@/lib/workspaceStore";
 
+import { FIXED_NOW } from "../unit/clock";
 import { makeIntakeFor, makePlan, makeWorkspace } from "./fixtures";
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
@@ -78,7 +81,7 @@ describe("EditEventDetails", () => {
   });
 
   it("adapts the plan to the edited details and saves both without asking to replace", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const adapted = makePlan({ summary: "Now for sixty guests." });
     mockedRefine.mockResolvedValueOnce({ ok: true, value: adapted });
     render(<EditEventDetails />);
@@ -103,7 +106,7 @@ describe("EditEventDetails", () => {
   });
 
   it("can be cancelled without touching the saved plan", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const holder: { resolve: (result: ApiResult<Plan>) => void } = { resolve: () => undefined };
     mockedRefine.mockReturnValueOnce(
       new Promise<ApiResult<Plan>>((resolve) => {
@@ -126,8 +129,34 @@ describe("EditEventDetails", () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 
+  it("does not overwrite a plan that changed while the update was running", async () => {
+    const user = userEvent.setup({ delay: null });
+    const holder: { resolve: (result: ApiResult<Plan>) => void } = { resolve: () => undefined };
+    mockedRefine.mockReturnValueOnce(
+      new Promise<ApiResult<Plan>>((resolve) => {
+        holder.resolve = resolve;
+      }),
+    );
+    render(<EditEventDetails />);
+    await user.click(updateButton());
+    const toggled = { type: "toggleVendor", id: saved.plan.vendors[0]!.id } as const;
+    vi.setSystemTime(FIXED_NOW.getTime() + SECOND_MS);
+    act(() => {
+      workspaceStore.dispatch(toggled);
+    });
+    const changed = workspaceStore.getSnapshot().workspace;
+    await act(async () => {
+      holder.resolve({ ok: true, value: makePlan({ summary: "Stale result." }) });
+      await Promise.resolve();
+    });
+    expect(await screen.findByRole("group", { name: "There is a problem" })).toHaveFocus();
+    expect(screen.getByText(STALE_EDIT_MESSAGE)).toBeVisible();
+    expect(workspaceStore.getSnapshot().workspace).toBe(changed);
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
   it("shows a refine failure in the error summary and keeps the edits", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     mockedRefine.mockResolvedValueOnce({ ok: false, message: "Model overloaded", issues: {} });
     render(<EditEventDetails />);
     await user.type(screen.getByLabelText("City or venue area"), " West");

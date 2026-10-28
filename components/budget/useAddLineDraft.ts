@@ -2,16 +2,14 @@
 
 import { useRef, useState, type RefObject, type SubmitEvent } from "react";
 
-import { sanitizeAmount } from "@/lib/budget";
+import { isValidLineAmount, sanitizeAmount } from "@/lib/budget";
 import { LIMITS, USER_ADDED_RATIONALE } from "@/lib/constants";
+import { randomId, type IdFactory } from "@/lib/ids";
 import type { BudgetLine } from "@/lib/schema";
+import type { Currency } from "@/lib/types";
 
-import type { AddLine, Currency } from "./types";
-import { isValidLineAmount, lineAmountError } from "./useAmountDraft";
-
-type IdFactory = () => string;
-
-const randomId: IdFactory = () => crypto.randomUUID();
+import type { AddLine } from "./types";
+import { lineAmountError } from "./useAmountDraft";
 
 export type AddLineOptions = {
   atMax: boolean;
@@ -36,6 +34,7 @@ const toBudgetLine = (draft: AddDraft, createId: IdFactory): BudgetLine => ({
   category: draft.category.trim(),
   amount: sanitizeAmount(Number(draft.amount), LIMITS.maxBudget),
   rationale: draft.rationale.trim() || USER_ADDED_RATIONALE,
+  addedByUser: true,
 });
 
 export type AddLineDraft = {
@@ -63,7 +62,9 @@ export const useAddLineDraft = ({
   };
   const submit = (event: SubmitEvent<HTMLFormElement>): void => {
     event.preventDefault();
-    if (atMax) return;
+    if (atMax) {
+      return;
+    }
     const found = validate(draft, currency);
     setErrors(found);
     if (found.category !== undefined) {

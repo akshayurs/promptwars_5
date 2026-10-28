@@ -31,7 +31,9 @@ describe("createRateLimiter", () => {
 
   it("refills tokens over time", () => {
     const { limiter, advance } = setup();
-    for (let i = 0; i < 3; i += 1) limiter.consume("a");
+    for (let i = 0; i < 3; i += 1) {
+      limiter.consume("a");
+    }
     expect(limiter.consume("a").allowed).toBe(false);
     advance(1000);
     expect(limiter.consume("a").allowed).toBe(true);
@@ -50,7 +52,9 @@ describe("createRateLimiter", () => {
     advance(500);
     limiter.consume("a");
     advance(100_000);
-    for (let i = 0; i < 3; i += 1) expect(limiter.consume("a").allowed).toBe(true);
+    for (let i = 0; i < 3; i += 1) {
+      expect(limiter.consume("a").allowed).toBe(true);
+    }
     expect(limiter.consume("a").allowed).toBe(false);
   });
 
@@ -113,7 +117,9 @@ describe("createRateLimiter", () => {
       resetSeconds: 5,
       windowSeconds: 50,
     });
-    for (let i = 0; i < 9; i += 1) limiter.consume("a");
+    for (let i = 0; i < 9; i += 1) {
+      limiter.consume("a");
+    }
     expect(limiter.consume("a")).toEqual({
       allowed: false,
       retryAfterSeconds: 5,

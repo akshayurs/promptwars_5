@@ -1,13 +1,10 @@
+import { progressOf, toggleById, type Progress } from "@/lib/collections";
 import type { Vendor } from "@/lib/schema";
 
-/** Flips one vendor between booked and not booked. */
-export const toggleVendor = (vendors: readonly Vendor[], id: string): Vendor[] =>
-  vendors.map((vendor) => (vendor.id === id ? { ...vendor, booked: !vendor.booked } : vendor));
+/** Flips one vendor between booked and not booked; returns the same array for an unknown id. */
+export const toggleVendor = <T extends readonly Vendor[]>(vendors: T, id: string): T | Vendor[] =>
+  toggleById<Vendor, T>(vendors, id, "booked");
 
-export type VendorProgress = { booked: number; total: number; ratio: number };
-
-/** Booked vendors out of the total, with the booked share as a 0..1 ratio. */
-export const vendorProgress = (vendors: readonly Vendor[]): VendorProgress => {
-  const booked = vendors.filter((vendor) => vendor.booked).length;
-  return { booked, total: vendors.length, ratio: vendors.length > 0 ? booked / vendors.length : 0 };
-};
+/** Booked vendors out of the total. */
+export const vendorProgress = (vendors: readonly Vendor[]): Progress =>
+  progressOf(vendors, (vendor) => vendor.booked);

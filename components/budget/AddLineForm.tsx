@@ -4,9 +4,9 @@ import { useId, type ReactElement, type RefObject } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
-import { LIMITS } from "@/lib/constants";
+import { LIMITS, MONEY_STEP } from "@/lib/constants";
+import type { Currency } from "@/lib/types";
 
-import type { Currency } from "./types";
 import { useAddLineDraft, type AddLineDraft, type AddLineOptions } from "./useAddLineDraft";
 
 const MAX_REASON = `A plan can have at most ${LIMITS.budgetLines.max} budget lines.`;
@@ -70,7 +70,7 @@ const LineFields = ({
         inputMode="decimal"
         min={0}
         max={LIMITS.maxBudget}
-        step={1}
+        step={MONEY_STEP}
         value={draft.amount}
         onChange={(event) => {
           update({ amount: event.target.value });

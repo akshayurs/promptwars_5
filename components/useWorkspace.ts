@@ -3,15 +3,16 @@
 import { useSyncExternalStore } from "react";
 
 import type { WorkspaceAction } from "@/lib/workspace";
-import { workspaceStore, type WorkspaceSnapshot } from "@/lib/workspaceStore";
+import { workspaceStore, type WorkspaceSnapshot, type WorkspaceStore } from "@/lib/workspaceStore";
 
 export type WorkspaceHandle = WorkspaceSnapshot & { dispatch: (action: WorkspaceAction) => void };
 
-export const useWorkspace = (): WorkspaceHandle => {
+/** Subscribes to the workspace store; the browser's store unless another one is injected. */
+export const useWorkspace = (store: WorkspaceStore = workspaceStore): WorkspaceHandle => {
   const snapshot = useSyncExternalStore(
-    workspaceStore.subscribe,
-    workspaceStore.getSnapshot,
-    workspaceStore.getServerSnapshot,
+    store.subscribe,
+    store.getSnapshot,
+    store.getServerSnapshot,
   );
-  return { ...snapshot, dispatch: workspaceStore.dispatch };
+  return { ...snapshot, dispatch: store.dispatch };
 };

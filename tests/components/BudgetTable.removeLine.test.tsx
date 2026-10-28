@@ -59,15 +59,60 @@ describe("BudgetTable (remove line)", () => {
     expect(addButton).toHaveFocus();
   });
 
-  it("announces each removal in a polite status region", async () => {
+  it("announces each removal in a visible polite status region", async () => {
     render(<StatefulTable initial={[...fourLines, ...extraLines(1)]} />);
     await screen.findByRole("button", { name: "Add line" });
     await userEvent.click(screen.getByRole("button", { name: "Remove Decor" }));
     const status = screen.getByText("Removed Decor.");
     expect(status).toHaveAttribute("role", "status");
-    expect(status).toHaveClass("sr-only");
+    expect(status).toBeVisible();
+    expect(status).not.toHaveClass("sr-only");
     await userEvent.click(screen.getByRole("button", { name: "Remove Venue" }));
     expect(status).toHaveTextContent("Removed Venue.");
+  });
+
+  it("offers Undo, which restores the line at its position and focuses its amount", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<StatefulTable initial={fourLines} />);
+    await user.click(screen.getByRole("button", { name: "Remove Catering" }));
+    expect(screen.queryByRole("button", { name: "Remove Catering" })).not.toBeInTheDocument();
+    const undo = screen.getByRole("button", { name: "Undo removing Catering" });
+    expect(undo).toHaveTextContent(/^Undo/);
+
+    await user.click(undo);
+    // The last row header is the "Allocated of" footer.
+    const categories = screen
+      .getAllByRole("rowheader")
+      .slice(0, -1)
+      .map((cell) => cell.firstChild?.textContent);
+    expect(categories).toEqual(fourLines.map((line) => line.category));
+    expect(screen.getByRole("spinbutton", { name: "Catering amount (INR)" })).toHaveFocus();
+    expect(screen.getByText("Restored Catering.")).toHaveAttribute("role", "status");
+    expect(screen.queryByRole("button", { name: /^Undo/ })).not.toBeInTheDocument();
+  });
+
+  it("offers Undo for the latest removal only", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<StatefulTable initial={[...fourLines, ...extraLines(1)]} />);
+    await user.click(screen.getByRole("button", { name: "Remove Venue" }));
+    await user.click(screen.getByRole("button", { name: "Remove Decor" }));
+    expect(screen.getAllByRole("button", { name: /^Undo/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Undo removing Decor" })).toBeVisible();
+  });
+
+  it("does not offer Undo when lines cannot be added back", async () => {
+    const onRemoveLine = vi.fn();
+    render(
+      <BudgetTable
+        lines={fourLines}
+        totalBudget={500_000}
+        currency="INR"
+        onRemoveLine={onRemoveLine}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Remove Venue" }));
+    expect(screen.getByText("Removed Venue.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^Undo/ })).not.toBeInTheDocument();
   });
 
   it("has no removal status region when lines cannot be removed", () => {

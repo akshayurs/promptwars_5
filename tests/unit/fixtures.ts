@@ -62,9 +62,24 @@ export const makeGeneratedPlan = (overrides: Partial<GeneratedPlan> = {}): Gener
     { title: "Wedding day", phase: "event-day", daysBeforeEvent: 0, details: "Enjoy" },
   ],
   vendors: [
-    { category: "Caterer", whyNeeded: "Food", questionsToAsk: ["Menu options?"] },
-    { category: "Florist", whyNeeded: "Decor", questionsToAsk: ["Seasonal flowers?"] },
-    { category: "Photographer", whyNeeded: "Memories", questionsToAsk: ["Albums included?"] },
+    {
+      category: "Caterer",
+      whyNeeded: "Food",
+      questionsToAsk: ["Menu options?"],
+      budgetCategory: "Catering",
+    },
+    {
+      category: "Florist",
+      whyNeeded: "Decor",
+      questionsToAsk: ["Seasonal flowers?"],
+      budgetCategory: "Decor",
+    },
+    {
+      category: "Venue manager",
+      whyNeeded: "Hall logistics",
+      questionsToAsk: ["Setup hours included?"],
+      budgetCategory: "Venue",
+    },
   ],
   ideas: [
     { title: "Floral arch", description: "Marigold arch", inspiredBy: "Floral vibe" },

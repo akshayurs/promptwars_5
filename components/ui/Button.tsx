@@ -30,6 +30,7 @@ const Spinner = (): ReactElement => (
 );
 
 // Busy buttons stay focusable (aria-disabled) so keyboard focus is not dropped mid-request.
+// Caller props are spread first so they can never override the busy state.
 export const Button = ({
   variant = "primary",
   busy = false,
@@ -38,12 +39,14 @@ export const Button = ({
   className = "",
   type = "button",
   onClick,
+  "aria-disabled": ariaDisabled,
   ...rest
 }: ButtonProps): ReactElement => (
   <button
+    {...rest}
     type={type}
     aria-busy={busy || undefined}
-    aria-disabled={busy || undefined}
+    aria-disabled={busy || ariaDisabled}
     className={`${BASE} ${VARIANTS[variant]} ${className}`}
     onClick={(event: MouseEvent<HTMLButtonElement>) => {
       if (busy) {
@@ -52,7 +55,6 @@ export const Button = ({
       }
       onClick?.(event);
     }}
-    {...rest}
   >
     {busy ? (
       <>

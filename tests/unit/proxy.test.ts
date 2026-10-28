@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { buildContentSecurityPolicy, config, proxy } from "@/proxy";
+import { config, proxy } from "@/proxy";
 
 const directives = (policy: string): Map<string, string> =>
   new Map(
@@ -11,12 +11,27 @@ const directives = (policy: string): Map<string, string> =>
     }),
   );
 
-describe("buildContentSecurityPolicy", () => {
-  const production = directives(buildContentSecurityPolicy("abc123", false));
-  const development = directives(buildContentSecurityPolicy("abc123", true));
+/** Directives of the page CSP the proxy sets when running under `nodeEnv`. */
+const policyIn = (nodeEnv: string): Map<string, string> => {
+  vi.stubEnv("NODE_ENV", nodeEnv);
+  try {
+    const response = proxy(new NextRequest("http://localhost/"));
+    return directives(response.headers.get("Content-Security-Policy") ?? "");
+  } finally {
+    vi.unstubAllEnvs();
+  }
+};
+
+const NONCE_SOURCE = "'nonce-[A-Za-z0-9+/=]+'";
+
+describe("page Content-Security-Policy", () => {
+  const production = policyIn("production");
+  const development = policyIn("development");
 
   it("locks scripts to the nonce without unsafe-eval in production", () => {
-    expect(production.get("script-src")).toBe("'self' 'nonce-abc123' 'strict-dynamic'");
+    expect(production.get("script-src")).toMatch(
+      new RegExp(`^'self' ${NONCE_SOURCE} 'strict-dynamic'$`),
+    );
   });
 
   it("allows unsafe-eval for scripts only in development", () => {
@@ -25,7 +40,7 @@ describe("buildContentSecurityPolicy", () => {
 
   it("uses the nonce for styles without unsafe-inline in every mode", () => {
     for (const policy of [production, development]) {
-      expect(policy.get("style-src")).toBe("'self' 'nonce-abc123'");
+      expect(policy.get("style-src")).toMatch(new RegExp(`^'self' ${NONCE_SOURCE}$`));
     }
   });
 

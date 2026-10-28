@@ -38,8 +38,12 @@ const TOO_SHORT = "Describe the change you want in a few words.";
 const STALE_MESSAGE = "The plan changed while refining. Try again.";
 
 const outcome = (result: ApiResult<Plan>, before: Plan, stale: boolean): StatusMessage => {
-  if (!result.ok) return { tone: "error", text: result.message };
-  if (stale) return { tone: "error", text: STALE_MESSAGE };
+  if (!result.ok) {
+    return { tone: "error", text: result.message };
+  }
+  if (stale) {
+    return { tone: "error", text: STALE_MESSAGE };
+  }
   return { tone: "success", text: describeDiff(diffPlans(before, result.value)) };
 };
 
@@ -49,7 +53,7 @@ export type Refinement = {
   instructionId: string;
   fieldError: string | null;
   status: StatusMessage | null;
-  statusRef: RefObject<HTMLDivElement | null>;
+  instructionRef: RefObject<HTMLTextAreaElement | null>;
   request: Omit<PendingRequest, "begin" | "settle">;
   submit: () => Promise<void>;
   undo: () => void;
@@ -62,16 +66,18 @@ export const useRefinement = (
   const [instruction, setInstruction] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusMessage | null>(null);
-  const statusRef = useRef<HTMLDivElement>(null);
+  const instructionRef = useRef<HTMLTextAreaElement>(null);
   const instructionId = useId();
   const { begin, settle, ...request } = usePendingRequest(TEXTS);
 
   const submit = async (): Promise<void> => {
-    if (request.busy) return;
+    if (request.busy) {
+      return;
+    }
     const trimmed = instruction.trim();
     if (trimmed.length < LIMITS.minInstructionChars) {
       setFieldError(TOO_SHORT);
-      document.getElementById(instructionId)?.focus();
+      instructionRef.current?.focus();
       return;
     }
     const { intake, plan, savedAt } = workspace;
@@ -79,26 +85,34 @@ export const useRefinement = (
     setFieldError(null);
     setStatus(null);
     const result = await deps.requestRefinement({ intake, plan, instruction: trimmed }, signal);
-    if (!settle(signal)) return;
+    if (!settle(signal)) {
+      return;
+    }
     const stale = deps.savedAt() !== savedAt;
     setStatus(outcome(result, plan, stale));
-    if (!result.ok || stale) return;
+    if (!result.ok || stale) {
+      return;
+    }
     setInstruction("");
     onApply(result.value);
   };
 
+  // Undo and Cancel disappear or disable themselves, so focus moves to the instruction field and
+  // the status region announces the outcome on its own.
   const undo = (): void => {
-    if (request.busy) return;
+    if (request.busy) {
+      return;
+    }
     onUndo();
     setStatus({ tone: "success", text: "Refinement undone." });
-    statusRef.current?.focus();
+    instructionRef.current?.focus();
   };
 
   const cancel = (): void => {
     request.cancel();
-    statusRef.current?.focus();
+    instructionRef.current?.focus();
   };
 
-  const fields = { instruction, setInstruction, instructionId, fieldError, status, statusRef };
+  const fields = { instruction, setInstruction, instructionId, fieldError, status, instructionRef };
   return { ...fields, request: { ...request, cancel }, submit, undo };
 };

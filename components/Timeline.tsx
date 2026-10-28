@@ -1,8 +1,12 @@
+"use client";
+
 import { useId, type ReactElement } from "react";
 
 import { MilestoneItem } from "@/components/timeline/MilestoneItem";
-import { EYEBROW, SECTION_HEADING } from "@/components/ui/styles";
-import type { Toggle } from "@/components/workspace/types";
+import type { Toggle } from "@/components/ui/CheckControl";
+import { ProgressHeader } from "@/components/ui/ProgressHeader";
+import { EYEBROW } from "@/components/ui/styles";
+import { localTodayIso, systemClock, type Clock } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import { groupMilestonesByPhase, milestoneProgress } from "@/lib/milestones";
 import type { Milestone } from "@/lib/schema";
@@ -12,6 +16,8 @@ export type TimelineProps = {
   timeline: readonly Milestone[];
   eventDate: string;
   onToggle?: Toggle;
+  /** Source of "today" for the due badges; the planner's local calendar day is used. */
+  now?: Clock;
 };
 
 const PHASE_LABELS: Record<Phase, string> = {
@@ -24,11 +30,11 @@ const PHASE_LABELS: Record<Phase, string> = {
 type PhaseGroupProps = {
   phase: Phase;
   milestones: readonly Milestone[];
-  eventDate: string;
+  dates: { eventDate: string; today: string };
   onToggle: Toggle | undefined;
 };
 
-const PhaseGroup = ({ phase, milestones, eventDate, onToggle }: PhaseGroupProps): ReactElement => (
+const PhaseGroup = ({ phase, milestones, dates, onToggle }: PhaseGroupProps): ReactElement => (
   <div className="flex flex-col gap-3">
     <h3 className={`flex items-center gap-2 ${EYEBROW}`}>
       <span aria-hidden="true" className="size-2 rounded-full bg-brand" />
@@ -39,7 +45,8 @@ const PhaseGroup = ({ phase, milestones, eventDate, onToggle }: PhaseGroupProps)
         <MilestoneItem
           key={milestone.id}
           milestone={milestone}
-          eventDate={eventDate}
+          eventDate={dates.eventDate}
+          today={dates.today}
           onToggle={onToggle}
         />
       ))}
@@ -47,30 +54,28 @@ const PhaseGroup = ({ phase, milestones, eventDate, onToggle }: PhaseGroupProps)
   </div>
 );
 
-export const Timeline = ({ timeline, eventDate, onToggle }: TimelineProps): ReactElement => {
-  const progress = milestoneProgress(timeline);
+export const Timeline = ({
+  timeline,
+  eventDate,
+  onToggle,
+  now = systemClock,
+}: TimelineProps): ReactElement => {
   const id = useId();
+  const dates = { eventDate, today: localTodayIso(now) };
   return (
     <section aria-labelledby={`${id}-heading`} className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <h2 id={`${id}-heading`} className={SECTION_HEADING}>
-          Timeline to {formatDate(eventDate)}
-        </h2>
-        <p id={`${id}-progress`} role="status" className="text-sm font-medium text-ink-muted">
-          {progress.done} of {progress.total} milestones done
-        </p>
-        <progress
-          aria-labelledby={`${id}-progress`}
-          value={progress.done}
-          max={Math.max(progress.total, 1)}
-        />
-      </div>
+      <ProgressHeader
+        id={id}
+        heading={`Timeline to ${formatDate(eventDate)}`}
+        progress={milestoneProgress(timeline)}
+        unit="milestones done"
+      />
       {groupMilestonesByPhase(timeline).map((group) => (
         <PhaseGroup
           key={group.phase}
           phase={group.phase}
           milestones={group.milestones}
-          eventDate={eventDate}
+          dates={dates}
           onToggle={onToggle}
         />
       ))}

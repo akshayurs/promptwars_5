@@ -34,6 +34,13 @@ describe("VendorChecklist", () => {
     expect(screen.getByText("(booked)")).toHaveClass("sr-only");
   });
 
+  it("shows the budget line a vendor is paid from, and nothing when there is no link", () => {
+    const [linked, unlinked] = makeVendors();
+    render(<VendorChecklist vendors={[{ ...linked!, budgetCategory: "Catering" }, unlinked!]} />);
+    expect(screen.getByText("Budget: Catering")).toBeVisible();
+    expect(screen.getAllByText(/^Budget:/)).toHaveLength(1);
+  });
+
   it("renders a checkbox labelled by category when interactive", async () => {
     render(<VendorChecklist vendors={makeVendors()} onToggle={vi.fn()} />);
     expect(await screen.findAllByRole("checkbox")).toHaveLength(3);
@@ -44,7 +51,7 @@ describe("VendorChecklist", () => {
   });
 
   it("calls onToggle with the vendor id on click", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onToggle = vi.fn();
     const vendors = makeVendors();
     render(<VendorChecklist vendors={vendors} onToggle={onToggle} />);
@@ -53,7 +60,7 @@ describe("VendorChecklist", () => {
   });
 
   it("toggles via clicking the label", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onToggle = vi.fn();
     const vendors = makeVendors();
     render(<VendorChecklist vendors={vendors} onToggle={onToggle} />);

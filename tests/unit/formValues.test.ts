@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toAdmission, toEventType } from "@/components/intake/formState";
+import { toAdmission, toEventType } from "@/components/intake/formValues";
 
 describe("form value narrowing", () => {
   it.each(["wedding", "birthday", "community"])("keeps the known event type %s", (value) => {

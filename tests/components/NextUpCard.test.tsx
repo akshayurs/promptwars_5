@@ -69,4 +69,17 @@ describe("NextUpCard", () => {
       screen.getByText(`Overdue: this was due ${formatDate(shiftDate(eventDate, -8))}.`),
     ).toBeInTheDocument();
   });
+
+  it("judges overdue against the injected clock's local day", () => {
+    const timeline = [milestone({ title: "Send invites", daysBeforeEvent: 10 })];
+    const dueDay = shiftDate(EVENT_DATE, -10);
+    render(
+      <NextUpCard
+        timeline={timeline}
+        eventDate={EVENT_DATE}
+        now={() => new Date(`${shiftDate(dueDay, 1)}T09:00:00Z`)}
+      />,
+    );
+    expect(screen.getByText(`Overdue: this was due ${formatDate(dueDay)}.`)).toBeInTheDocument();
+  });
 });

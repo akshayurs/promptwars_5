@@ -1,31 +1,20 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useId, type ReactElement } from "react";
 
-import { LazyFallback } from "@/components/ui/LazyFallback";
+import { Button } from "@/components/ui/Button";
 import { CARD_PADDED, SECTION_HEADING } from "@/components/ui/styles";
 import { budgetStatus } from "@/lib/budget";
 import { LIMITS } from "@/lib/constants";
 import type { BudgetLine } from "@/lib/schema";
+import type { Currency } from "@/lib/types";
 
+import { AddLineForm } from "./budget/AddLineForm";
 import { BudgetGrid } from "./budget/BudgetGrid";
 import { BudgetStatusPanel } from "./budget/BudgetStatusPanel";
 import { BudgetTotal } from "./budget/BudgetTotal";
-import type {
-  AddLine,
-  AmountChange,
-  Currency,
-  RemoveControl,
-  RemoveLine,
-  TotalChange,
-} from "./budget/types";
+import type { AddLine, AmountChange, RemoveControl, RemoveLine, TotalChange } from "./budget/types";
 import { useLineEditing } from "./budget/useLineEditing";
-
-// Only the editable workspace shows the form, so the read-only summary never downloads it.
-const AddLineForm = dynamic(() => import("./budget/AddLineForm").then((mod) => mod.AddLineForm), {
-  loading: () => <LazyFallback label="add line form" className="h-72" />,
-});
 
 export type BudgetTableProps = {
   lines: readonly BudgetLine[];
@@ -39,18 +28,30 @@ export type BudgetTableProps = {
 
 const MIN_REASON = `A plan needs at least ${LIMITS.budgetLines.min} budget lines.`;
 
-// Screen-reader text for row removal: the confirmation and why removing is blocked.
-const RemovalNotes = ({
-  remove,
-  announcement,
-}: {
+type RemovalNotesProps = {
   remove: RemoveControl;
   announcement: string;
-}): ReactElement => (
+  undo: { category: string; run: () => void } | null;
+};
+
+// Confirms a removal or restore, offers to undo the last removal and explains a blocked removal.
+const RemovalNotes = ({ remove, announcement, undo }: RemovalNotesProps): ReactElement => (
   <>
-    <p role="status" className="sr-only">
-      {announcement}
-    </p>
+    {/* Until there is something to show, the wrapper adds no box (and no gap) to the layout. */}
+    <div className={announcement ? "flex flex-wrap items-center gap-3" : "contents"}>
+      <p role="status" className={announcement ? "text-sm text-ink-muted" : "sr-only"}>
+        {announcement}
+      </p>
+      {undo ? (
+        <Button
+          variant="secondary"
+          aria-label={`Undo removing ${undo.category}`}
+          onClick={undo.run}
+        >
+          Undo
+        </Button>
+      ) : null}
+    </div>
     {remove.disabled ? (
       <p id={remove.reasonId} className="sr-only">
         {MIN_REASON}
@@ -70,11 +71,8 @@ export const BudgetTable = ({
 }: BudgetTableProps): ReactElement => {
   const status = budgetStatus(totalBudget, lines);
   const headingId = useId();
-  const { remove, addButtonRef, headingRef, handleAdd, announcement } = useLineEditing(
-    lines,
-    onAddLine,
-    onRemoveLine,
-  );
+  const { remove, addButtonRef, headingRef, handleAdd, registerAmount, announcement, undo } =
+    useLineEditing(lines, onAddLine, onRemoveLine);
   return (
     <section aria-labelledby={headingId} className={`${CARD_PADDED} flex flex-col gap-5`}>
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -100,9 +98,10 @@ export const BudgetTable = ({
         allocated={status.allocated}
         currency={currency}
         onAmountChange={onAmountChange}
+        registerAmount={registerAmount}
         remove={remove}
       />
-      {remove ? <RemovalNotes remove={remove} announcement={announcement} /> : null}
+      {remove ? <RemovalNotes remove={remove} announcement={announcement} undo={undo} /> : null}
       <BudgetStatusPanel status={status} totalBudget={totalBudget} currency={currency} />
       {onAddLine ? (
         <AddLineForm

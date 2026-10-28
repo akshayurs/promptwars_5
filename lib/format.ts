@@ -18,7 +18,9 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", time
 
 const moneyFormatter = (currency: Currency): Intl.NumberFormat => {
   const cached = moneyFormatters.get(currency);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
   const formatter = new Intl.NumberFormat(LOCALE_BY_CURRENCY[currency], {
     style: "currency",
     currency,

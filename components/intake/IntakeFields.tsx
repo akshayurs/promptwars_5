@@ -9,13 +9,13 @@ import { LogisticsFields, StoryFields } from "./CommonFields";
 import { EventDetailsFields } from "./EventDetailsFields";
 import { EventTypeChoice } from "./EventTypeChoice";
 import { FIELD_LABELS } from "./fieldLabels";
+import { errorFor } from "./fieldIssues";
 import {
-  errorFor,
   toEventType,
   type DetailsUpdate,
   type DetailsValues,
   type FieldsProps,
-} from "./formState";
+} from "./formValues";
 
 type IntakeFieldsProps = FieldsProps & { details: DetailsValues; onDetail: DetailsUpdate };
 

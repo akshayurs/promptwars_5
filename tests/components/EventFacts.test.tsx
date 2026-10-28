@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 
 import { EventFacts } from "@/components/EventFacts";
+import { formatCount } from "@/lib/format";
 import type { EventType, Intake } from "@/lib/schema";
 
 import { makeIntake, makeIntakeFor } from "./fixtures";
@@ -70,5 +71,19 @@ describe("EventFacts", () => {
     });
     expect(brief()).toHaveTextContent("<b>Zed</b> turns 30");
     expect(brief().querySelector("b")).toBeNull();
+  });
+
+  it("formats the guest count and counts days from the injected clock", () => {
+    render(
+      <EventFacts
+        intake={makeIntake({ guestCount: 12_000, eventDate: "2030-03-11" })}
+        now={() => new Date("2030-03-01T10:00:00Z")}
+      />,
+    );
+    const guests = screen.getByText("Guests", { selector: "dt" }).nextElementSibling;
+    expect(guests).toHaveTextContent(formatCount(12_000));
+    expect(screen.getByText("Date", { selector: "dt" }).nextElementSibling).toHaveTextContent(
+      "(10 days away)",
+    );
   });
 });

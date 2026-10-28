@@ -4,6 +4,7 @@ import { DAY_MS } from "@/lib/constants";
 import {
   daysBetween,
   daysUntil,
+  localTodayIso,
   parseIsoDay,
   shiftDate,
   systemClock,
@@ -93,5 +94,28 @@ describe("shiftDate", () => {
     expect(shiftDate("2030-01-01", -1)).toBe("2029-12-31");
     expect(shiftDate("2028-03-01", -1)).toBe("2028-02-29");
     expect(shiftDate("2030-05-05", 0)).toBe("2030-05-05");
+  });
+});
+
+describe("localTodayIso", () => {
+  // A UTC instant whose wall-clock fields belong to a zone east of UTC (already the next day).
+  const eastOfUtc = (): Date =>
+    Object.assign(new Date("2030-12-31T20:00:00Z"), {
+      getFullYear: () => 2031,
+      getMonth: () => 0,
+      getDate: () => 1,
+    });
+
+  it("returns the local calendar day, not the UTC one", () => {
+    expect(localTodayIso(eastOfUtc)).toBe("2031-01-01");
+    expect(todayIso(eastOfUtc)).toBe("2030-12-31");
+  });
+
+  it("matches the UTC day when local time is UTC", () => {
+    expect(localTodayIso(at("2030-06-15T23:59:59Z"))).toBe("2030-06-15");
+  });
+
+  it("defaults to the system clock", () => {
+    expect(localTodayIso()).toBe(localTodayIso(systemClock));
   });
 });

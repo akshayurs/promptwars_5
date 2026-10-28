@@ -28,7 +28,7 @@ describe("IntakeForm submission lifecycle", () => {
   });
 
   it("shows the busy state while the request is pending", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const resolvers: Array<(result: ApiResult<Plan>) => void> = [];
     mockedRequestPlan.mockReturnValueOnce(
       new Promise<ApiResult<Plan>>((r) => {
@@ -57,7 +57,7 @@ describe("IntakeForm submission lifecycle", () => {
   });
 
   it("refocuses the error summary on every failed submit", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<IntakeForm flow={flow} />);
     const submit = screen.getByRole("button", { name: "Generate plan" });
     await user.click(submit);
@@ -83,7 +83,7 @@ describe("IntakeForm submission lifecycle", () => {
   });
 
   it("aborts the request on unmount and ignores the late result", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const resolvers: Array<(result: ApiResult<Plan>) => void> = [];
     mockedRequestPlan.mockReturnValueOnce(
       new Promise<ApiResult<Plan>>((r) => {

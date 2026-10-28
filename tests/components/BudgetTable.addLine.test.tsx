@@ -39,7 +39,7 @@ describe("BudgetTable (add line)", () => {
     expect(onAddLine).not.toHaveBeenCalled();
   });
 
-  it("calls onAddLine with a uuid, sanitized amount and default rationale, then clears", async () => {
+  it("calls onAddLine with a uuid, sanitised amount and default rationale, then clears", async () => {
     const { onAddLine } = await renderAdd();
     await userEvent.type(screen.getByRole("textbox", { name: "Category" }), "  Music  ");
     const amount = screen.getByRole("spinbutton", { name: "Amount (INR)" });
@@ -53,6 +53,7 @@ describe("BudgetTable (add line)", () => {
       category: "Music",
       amount: 1234.57,
       rationale: "Added by you",
+      addedByUser: true,
     });
     expect(screen.getByRole("textbox", { name: "Category" })).toHaveValue("");
     expect(amount).toHaveValue(0);
@@ -63,9 +64,13 @@ describe("BudgetTable (add line)", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Category" }), "Cake");
     await userEvent.type(screen.getByRole("textbox", { name: /Why it matters/ }), "Birthday cake");
     await userEvent.click(screen.getByRole("button", { name: "Add line" }));
-    expect(onAddLine).toHaveBeenCalledWith(
-      expect.objectContaining({ category: "Cake", amount: 0, rationale: "Birthday cake" }),
-    );
+    expect(onAddLine).toHaveBeenCalledTimes(1);
+    expect(onAddLine.mock.calls[0]![0]).toMatchObject({
+      category: "Cake",
+      amount: 0,
+      rationale: "Birthday cake",
+      addedByUser: true,
+    });
     expect(screen.getByRole("textbox", { name: /Why it matters/ })).toHaveValue("");
   });
 
@@ -105,6 +110,7 @@ describe("BudgetTable (add line)", () => {
       category: "Music",
       amount: 0,
       rationale: "Added by you",
+      addedByUser: true,
     });
   });
 

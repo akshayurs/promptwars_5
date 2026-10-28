@@ -16,6 +16,7 @@ import { IconBadge } from "@/components/ui/IconBadge";
 import { SparklesIcon } from "@/components/ui/Icons";
 import { CARD_PADDED, SECTION_HEADING, TEXT_LINK } from "@/components/ui/styles";
 import { LIMITS } from "@/lib/constants";
+import { PAGE_TITLES } from "@/lib/messages";
 
 /** The saved workspace to refine, plus callbacks that apply or undo a refined plan. */
 type RefinePanelProps = RefinementOptions;
@@ -41,7 +42,7 @@ const RefineActions = ({
   refinement,
   canUndo,
 }: {
-  refinement: Omit<Refinement, "statusRef">;
+  refinement: Omit<Refinement, "instructionRef">;
   canUndo: boolean;
 }): ReactElement => {
   const undoReasonId = useId();
@@ -73,14 +74,14 @@ const EditDetailsHint = (): ReactElement => (
   <p className="text-sm text-ink-muted">
     To change the total budget, guest count or date, use{" "}
     <Link href="/plan/edit" className={TEXT_LINK}>
-      Edit event details
+      {PAGE_TITLES.editDetails}
     </Link>
     .
   </p>
 );
 
 export const RefinePanel = (props: RefinePanelProps): ReactElement => {
-  const { statusRef, ...refinement } = useRefinement(props);
+  const { instructionRef, ...refinement } = useRefinement(props);
   const { request } = refinement;
   const headingId = useId();
   return (
@@ -102,6 +103,7 @@ export const RefinePanel = (props: RefinePanelProps): ReactElement => {
         className="flex flex-col gap-3"
       >
         <TextAreaField
+          ref={instructionRef}
           id={refinement.instructionId}
           label="What should change?"
           hint="For example: cut the budget by 20%, make it eco-friendly, add a kids' corner."
@@ -116,7 +118,7 @@ export const RefinePanel = (props: RefinePanelProps): ReactElement => {
         <RefineActions refinement={refinement} canUndo={props.workspace.previousPlan !== null} />
       </form>
       <div className="flex flex-wrap items-center gap-3">
-        <div ref={statusRef} role="status" tabIndex={-1} className="min-w-0 flex-1">
+        <div role="status" className="min-w-0 flex-1 wrap-anywhere">
           <StatusContent status={refinement.status} progress={request.statusText} />
         </div>
         {request.busy ? (

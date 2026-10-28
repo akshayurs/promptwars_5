@@ -6,6 +6,8 @@ import type { ReactElement, ReactNode } from "react";
 
 import { NavLink } from "@/components/NavLink";
 import { LogoMark } from "@/components/ui/Icons";
+import { THEME_COLORS } from "@/lib/constants";
+import { PAGE_TITLES } from "@/lib/messages";
 
 import "./globals.css";
 
@@ -23,15 +25,15 @@ export const viewport: Viewport = {
   initialScale: 1,
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f8fa" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0d12" },
+    { media: "(prefers-color-scheme: light)", color: THEME_COLORS.light },
+    { media: "(prefers-color-scheme: dark)", color: THEME_COLORS.dark },
   ],
 };
 
 const navLinks = [
-  { href: "/", label: "New plan" },
-  { href: "/plan", label: "Workspace" },
-  { href: "/plan/summary", label: "Summary" },
+  { href: "/", label: PAGE_TITLES.newPlan },
+  { href: "/plan", label: PAGE_TITLES.workspace },
+  { href: "/plan/summary", label: PAGE_TITLES.summary },
 ] as const;
 
 export default async function RootLayout({
