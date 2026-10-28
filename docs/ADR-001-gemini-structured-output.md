@@ -24,7 +24,7 @@ the client.
 - Keep ids and `booked` out of the model contract. The server adds UUIDs and `booked: false`
   ([lib/plan.ts](../lib/plan.ts)); on refinement it carries bookings over by normalised vendor
   category.
-- Bound cost and latency with `maxOutputTokens: 8192`, `thinkingBudget: 512` and a 45 second
+- Bound cost and latency with `maxOutputTokens: 16384`, `thinkingBudget: 512` and a 45 second
   abort ([API in lib/constants.ts](../lib/constants.ts)).
 - Wrap user data in tagged blocks and instruct the model to treat them as data
   ([lib/prompts.ts](../lib/prompts.ts)).

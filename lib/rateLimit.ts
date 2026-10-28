@@ -1,3 +1,5 @@
+import { API } from "@/lib/constants";
+
 type Bucket = { tokens: number; updatedAt: number };
 
 type RateLimitDecision = { allowed: boolean; retryAfterSeconds: number };
@@ -10,7 +12,6 @@ export type RateLimiterOptions = {
 };
 
 const MS_PER_SECOND = 1000;
-const MAX_KEYS = 10_000;
 const SWEEP_INTERVAL_MS = MS_PER_SECOND;
 
 export type RateLimiter = { consume(key: string): RateLimitDecision; size(): number };
@@ -19,7 +20,7 @@ export const createRateLimiter = ({
   capacity,
   refillPerSecond,
   now = Date.now,
-  maxKeys = MAX_KEYS,
+  maxKeys = API.rateLimit.maxKeys,
 }: RateLimiterOptions): RateLimiter => {
   // Map iteration order doubles as LRU order: every touch re-inserts the key at the end.
   const buckets = new Map<string, Bucket>();

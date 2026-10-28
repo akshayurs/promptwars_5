@@ -35,7 +35,7 @@ returned to the browser and kept in `localStorage`.
 | Secret exposure                    | The key is read only on the server by [lib/env.ts](lib/env.ts), validated at boot in [instrumentation.ts](instrumentation.ts) and used in [lib/gemini.ts](lib/gemini.ts). It is never sent to the client and never logged.                                                                             |
 | Cross-site scripting               | Per-request nonce CSP with `strict-dynamic` and no `unsafe-inline` for scripts in production ([proxy.ts](proxy.ts)). React escapes all model output; plain-text output is requested in [lib/prompts.ts](lib/prompts.ts).                                                                               |
 | Clickjacking                       | `frame-ancestors 'none'` in the CSP and `X-Frame-Options: DENY` ([next.config.ts](next.config.ts)).                                                                                                                                                                                                    |
-| Transport and browser hardening    | `Strict-Transport-Security` (two years, preload), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera, microphone, geolocation, payment disabled), `Cross-Origin-Opener-Policy: same-origin`, `X-Powered-By` removed.                  |
+| Transport and browser hardening    | `Strict-Transport-Security` (two years, `includeSubDomains`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera, microphone, geolocation, payment disabled), `Cross-Origin-Opener-Policy: same-origin`, `X-Powered-By` removed.      |
 | Malformed or oversized input       | `readJsonBody` in [lib/http.ts](lib/http.ts) enforces `application/json` (415), a 32,768 byte limit (413) and valid JSON (400). Zod `.strict()` schemas in [lib/schema.ts](lib/schema.ts) reject unknown keys and out-of-range values (400 with field issues).                                         |
 | Prompt injection                   | Intake and plan data are wrapped in `<intake>`, `<current_plan>` and `<request>` tags and the system prompt marks them as untrusted data ([lib/prompts.ts](lib/prompts.ts)). The model has no tools, so the worst outcome is a poor plan, and every response is re-validated by `GeneratedPlanSchema`. |
 | Malformed model output             | JSON-schema constrained output plus Zod validation; one retry, then a 502 ([lib/gemini.ts](lib/gemini.ts)).                                                                                                                                                                                            |
@@ -47,16 +47,19 @@ returned to the browser and kept in `localStorage`.
 ## Known limitations
 
 - The rate limiter is in memory and per server instance. It does not coordinate across instances
-  or restarts.
-- The client key comes from `x-forwarded-for` or `x-real-ip`
-  ([lib/http.ts](lib/http.ts)). Deploy behind a proxy that overwrites these headers, otherwise a
-  client can spoof them.
+  (on Vercel, each serverless instance has its own counters) or restarts.
+- The client key is the right-most `x-forwarded-for` hop, which the platform proxy appends
+  (Vercel overwrites the header), falling back to `x-real-ip` ([lib/http.ts](lib/http.ts)).
+  Behind a proxy that does not set these headers, all clients share one key or can spoof one.
+- The limiter's bucket map is capped at 10,000 keys with least-recently-used eviction
+  (`MAX_KEYS` in [lib/rateLimit.ts](lib/rateLimit.ts)), so memory stays bounded under a
+  flood of distinct keys; an evicted key starts again with a full bucket.
 - Plan data is stored unencrypted in the browser's `localStorage` and is readable by anyone with
   access to that browser profile.
 - Event details are sent to Google's Gemini API; do not enter sensitive personal data.
 
 ## Operational guidance
 
-- Provide `GEMINI_API_KEY` through the host's secret store or `.env.local`. Never commit
-  `.env*` files.
+- Provide `GEMINI_API_KEY` through the host's secret store (a sensitive environment variable on
+  Vercel) or `.env.local` for local development. Never commit `.env*` files.
 - Run `npm audit` and update dependencies regularly; re-run `npm run check` afterwards.

@@ -11,7 +11,7 @@ add authentication, retention and privacy obligations that the product does not 
 ## Decision
 
 - Persist one `StoredWorkspace` (`version`, `intake`, `plan`, `previousPlan`, `savedAt`) under the
-  key `eventcraft.plan.v1` in `localStorage` ([lib/storage.ts](../lib/storage.ts),
+  key `eventcraft.plan.v2` in `localStorage` ([lib/storage.ts](../lib/storage.ts),
   [lib/constants.ts](../lib/constants.ts)).
 - Validate on read with `StoredWorkspaceSchema`. Corrupt JSON or schema mismatches are removed and
   treated as an empty workspace. Writes that throw (quota, private mode) return `false` and the
@@ -31,7 +31,7 @@ add authentication, retention and privacy obligations that the product does not 
   by anyone with access to the profile. It is unencrypted.
 - `useSyncExternalStore` avoids effect-based hydration and keeps renders consistent across tabs
   of components that subscribe, but changes made in another browser tab are not observed live.
-- The `v1` key and `version: 1` literal allow a future migration: a new schema version would use a
+- The `v2` key and `version: 2` literal allow a future migration: a new schema version would use a
   new key or an explicit upgrade step; until then an incompatible stored value is discarded.
 - The refine request sends the full plan to the server on each call, bounded by the 32,768 byte
   request limit.

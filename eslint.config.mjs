@@ -8,6 +8,7 @@ import tseslint from "typescript-eslint";
 
 const MAX_COGNITIVE_COMPLEXITY = 10;
 const MAX_FUNCTION_LINES = 60;
+const MAX_FILE_LINES = 150;
 const MAX_PARAMS = 3;
 
 export default defineConfig([
@@ -41,6 +42,7 @@ export default defineConfig([
         "error",
         { max: MAX_FUNCTION_LINES, skipBlankLines: true, skipComments: true },
       ],
+      "max-lines": ["error", { max: MAX_FILE_LINES, skipBlankLines: true, skipComments: true }],
       "max-params": ["error", MAX_PARAMS],
       "no-nested-ternary": "error",
       "no-console": "error",
@@ -56,6 +58,7 @@ export default defineConfig([
   {
     files: ["tests/**/*.ts", "tests/**/*.tsx"],
     rules: {
+      "max-lines": "off",
       "max-lines-per-function": "off",
       "sonarjs/no-nested-functions": "off",
       "@typescript-eslint/no-non-null-assertion": "off",

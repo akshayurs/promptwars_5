@@ -1,5 +1,7 @@
 import { useId, type ReactElement } from "react";
 
+import { CalendarIcon, MapPinIcon, UsersIcon, WalletIcon } from "@/components/ui/Icons";
+import { CARD, EYEBROW, badgeClass } from "@/components/ui/styles";
 import { daysUntil, formatDate, formatMoney } from "@/lib/format";
 import type { EventType, Intake, StoredWorkspace } from "@/lib/schema";
 
@@ -35,17 +37,20 @@ const detailsSummary = (intake: Intake): string => {
 const FactList = ({ intake }: { intake: Intake }): ReactElement => {
   const countdown = countdownLabel(daysUntil(intake.eventDate));
   const facts = [
-    ["Date", formatDate(intake.eventDate) + countdown],
-    ["Guests", String(intake.guestCount)],
-    ["Budget", formatMoney(intake.totalBudget, intake.currency)],
-    ["Location", intake.location],
+    ["Date", formatDate(intake.eventDate) + countdown, CalendarIcon],
+    ["Guests", String(intake.guestCount), UsersIcon],
+    ["Budget", formatMoney(intake.totalBudget, intake.currency), WalletIcon],
+    ["Location", intake.location, MapPinIcon],
   ] as const;
   return (
-    <dl className="grid gap-3 text-sm sm:grid-cols-4">
-      {facts.map(([term, detail]) => (
-        <div key={term}>
-          <dt className="text-ink-muted">{term}</dt>
-          <dd>{detail}</dd>
+    <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {facts.map(([term, detail, Icon]) => (
+        <div key={term} className={`${CARD} flex min-w-0 flex-col gap-1 p-3.5 sm:p-4`}>
+          <dt className={`flex items-center gap-1.5 ${EYEBROW}`}>
+            <Icon className="size-3.5 text-brand" />
+            {term}
+          </dt>
+          <dd className="font-semibold break-words">{detail}</dd>
         </div>
       ))}
     </dl>
@@ -59,16 +64,19 @@ const Brief = ({ intake }: { intake: Intake }): ReactElement => {
     ["Must-haves", intake.mustHaves],
   ].filter(([, text]) => text !== "");
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2 text-sm">
-      <h2 id={headingId} className="text-base font-semibold">
+    <section
+      aria-labelledby={headingId}
+      className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-muted p-4 text-sm sm:p-5"
+    >
+      <h2 id={headingId} className={EYEBROW}>
         Your brief
       </h2>
-      <p>{detailsSummary(intake)}</p>
-      <dl className="grid gap-2 sm:grid-cols-2">
+      <p className="text-base font-medium">{detailsSummary(intake)}</p>
+      <dl className="grid gap-3 sm:grid-cols-2">
         {preferences.map(([term, detail]) => (
-          <div key={term}>
-            <dt className="text-ink-muted">{term}</dt>
-            <dd>{detail}</dd>
+          <div key={term} className="flex flex-col gap-0.5">
+            <dt className="font-medium text-ink-muted">{term}</dt>
+            <dd className="leading-relaxed">{detail}</dd>
           </div>
         ))}
       </dl>
@@ -80,9 +88,7 @@ export const EventFacts = ({ workspace }: { workspace: StoredWorkspace }): React
   const { intake } = workspace;
   return (
     <div className="flex flex-col gap-4">
-      <p className="w-fit rounded-full border border-brand bg-brand-soft px-3 py-1 text-sm font-medium text-ink">
-        {EVENT_LABELS[intake.eventType]}
-      </p>
+      <p className={badgeClass("brand")}>{EVENT_LABELS[intake.eventType]}</p>
       <FactList intake={intake} />
       <Brief intake={intake} />
     </div>

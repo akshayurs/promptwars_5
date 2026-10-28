@@ -11,7 +11,7 @@ export type Env = z.infer<typeof EnvSchema>;
 export const readEnv = (source: Record<string, string | undefined> = process.env): Env => {
   const parsed = EnvSchema.safeParse(source);
   if (!parsed.success) {
-    throw new Error("Missing configuration: set GEMINI_API_KEY in .env.local (see .env.example).");
+    throw new Error("Missing configuration: set the GEMINI_API_KEY environment variable.");
   }
   return parsed.data;
 };

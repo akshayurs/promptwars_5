@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import type { ReactElement, ReactNode } from "react";
 
 import { NavLink } from "@/components/NavLink";
+import { LogoMark } from "@/components/ui/Icons";
 
 import "./globals.css";
 
@@ -22,8 +23,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbf8f3" },
-    { media: "(prefers-color-scheme: dark)", color: "#17120f" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f8fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0d12" },
   ],
 };
 
@@ -43,17 +44,21 @@ export default async function RootLayout({
       <body className="flex min-h-full flex-col">
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-surface-raised focus:px-4 focus:py-2"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-lg focus:bg-surface-raised focus:px-4 focus:py-2 focus:font-medium focus:shadow-card"
         >
           Skip to main content
         </a>
-        <header className="print-hidden border-b border-line bg-surface-raised">
-          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-4">
-            <Link href="/" className="text-xl font-semibold text-brand">
+        <header className="print-hidden z-40 border-b border-line bg-surface-raised/85 backdrop-blur-md sm:sticky sm:top-0">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+            <Link
+              href="/"
+              className="flex min-h-11 items-center gap-2.5 rounded-lg text-lg font-semibold tracking-tight text-ink"
+            >
+              <LogoMark />
               EventCraft
             </Link>
             <nav aria-label="Primary">
-              <ul className="flex gap-4 text-sm">
+              <ul className="flex flex-wrap gap-1 text-sm">
                 {navLinks.map((link) => (
                   <li key={link.href}>
                     <NavLink href={link.href}>{link.label}</NavLink>
@@ -63,7 +68,11 @@ export default async function RootLayout({
             </nav>
           </div>
         </header>
-        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+        <main
+          id="main"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 focus:outline-none sm:py-12"
+        >
           {children}
         </main>
         <footer className="print-hidden border-t border-line px-4 py-6 text-center text-sm text-ink-muted">

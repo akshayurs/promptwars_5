@@ -22,7 +22,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["lib/**", "components/**", "app/api/**", "proxy.ts"],
-      thresholds: { lines: 95, branches: 90, functions: 95, statements: 95 },
+      thresholds: {
+        lines: 95,
+        branches: 90,
+        functions: 95,
+        statements: 95,
+        "lib/**": { lines: 100, branches: 100, functions: 100, statements: 100 },
+      },
       reporter: ["text", "html"],
     },
   },

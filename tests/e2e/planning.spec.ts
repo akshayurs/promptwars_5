@@ -157,4 +157,29 @@ test.describe("summary", () => {
     await page.goto("/plan");
     await expect(page.getByText("No plan yet")).toBeVisible();
   });
+
+  test("print layout hides site chrome and expands every vendor's questions", async ({ page }) => {
+    const workspace = makeWorkspace();
+    await seedWorkspace(page, workspace);
+    await page.goto("/plan/summary");
+    await expect(
+      page.getByRole("heading", { level: 1, name: workspace.intake.eventName }),
+    ).toBeVisible();
+
+    await page.emulateMedia({ media: "print" });
+    await expect(page.getByRole("banner")).toBeHidden();
+    await expect(page.getByRole("contentinfo")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Export JSON" })).toBeHidden();
+    await expect(page.getByRole("table", { name: "Budget allocation" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Timeline to/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Vendor checklist" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Personalised ideas" })).toBeVisible();
+
+    const details = page.locator("details");
+    await expect(details).not.toHaveCount(0);
+    await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+    for (const item of await details.all()) await expect(item).toHaveAttribute("open", "");
+    await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+    for (const item of await details.all()) await expect(item).not.toHaveAttribute("open");
+  });
 });

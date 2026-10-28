@@ -2,12 +2,16 @@
 
 import { useRef, useState, type ReactElement, type RefObject } from "react";
 
+import { describeDiff } from "@/components/refine/describeDiff";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { TextAreaField } from "@/components/ui/Field";
+import { IconBadge } from "@/components/ui/IconBadge";
+import { SparklesIcon } from "@/components/ui/Icons";
+import { CARD_PADDED, SECTION_HEADING } from "@/components/ui/styles";
 import { requestRefinement } from "@/lib/client";
 import { LIMITS } from "@/lib/constants";
-import { diffPlans, type PlanDiff } from "@/lib/plan";
+import { diffPlans } from "@/lib/plan";
 import type { Plan, StoredWorkspace } from "@/lib/schema";
 import { workspaceStore } from "@/lib/workspaceStore";
 
@@ -21,25 +25,6 @@ type StatusMessage = { tone: "success" | "error"; text: string };
 
 const MIN_INSTRUCTION = 3;
 const STALE_MESSAGE = "The plan changed while refining. Try again.";
-
-const DIFF_LABELS = [
-  ["budget", "budget line"],
-  ["timeline", "milestone"],
-  ["vendors", "vendor"],
-  ["ideas", "idea"],
-] as const;
-
-const countOf = (count: number, noun: string): string =>
-  `${count} ${noun}${count === 1 ? "" : "s"}`;
-
-const describeDiff = (diff: PlanDiff): string => {
-  const changed = DIFF_LABELS.filter(([key]) => diff[key] > 0).map(([key, noun]) =>
-    countOf(diff[key], noun),
-  );
-  return changed.length > 0
-    ? `Updated ${changed.join(", ")}.`
-    : "The plan already matched your request.";
-};
 
 const currentSavedAt = (): string | undefined => workspaceStore.getSnapshot().workspace?.savedAt;
 
@@ -117,11 +102,11 @@ const RefineStatus = ({
 export const RefinePanel = (props: RefinePanelProps): ReactElement => {
   const refinement = useRefinement(props);
   return (
-    <section
-      aria-labelledby="refine-heading"
-      className="flex flex-col gap-4 rounded-md border border-line bg-surface-raised p-4"
-    >
-      <h2 id="refine-heading" className="text-lg font-semibold">
+    <section aria-labelledby="refine-heading" className={`${CARD_PADDED} flex flex-col gap-4`}>
+      <h2 id="refine-heading" className={`${SECTION_HEADING} flex items-center gap-2`}>
+        <IconBadge className="size-8">
+          <SparklesIcon />
+        </IconBadge>
         Refine with AI
       </h2>
       <form
@@ -145,6 +130,7 @@ export const RefinePanel = (props: RefinePanelProps): ReactElement => {
         />
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" busy={refinement.busy} busyLabel="Refining…">
+            <SparklesIcon />
             Apply refinement
           </Button>
           <Button

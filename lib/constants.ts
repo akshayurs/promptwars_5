@@ -25,7 +25,7 @@ export const LIMITS = {
 
 export const API = {
   requestTimeoutMs: 45_000,
-  rateLimit: { capacity: 10, refillPerSecond: 0.2 },
+  rateLimit: { capacity: 10, refillPerSecond: 0.2, maxKeys: 10_000 },
   geminiModel: "gemini-2.5-flash",
   geminiMaxOutputTokens: 16_384,
   geminiThinkingBudget: 512,

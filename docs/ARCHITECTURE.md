@@ -6,19 +6,19 @@ and persists all plan state.
 
 ## Layout
 
-| Path                                                                                                                            | Responsibility                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [app/](../app)                                                                                                                  | Routes: `/` intake, `/plan` workspace, `/plan/summary`, `/api/plan`, `/api/refine` |
-| [components/](../components)                                                                                                    | UI, feature components and [ui/](../components/ui) primitives                      |
-| [lib/schema.ts](../lib/schema.ts)                                                                                               | Zod schemas and inferred types (single source of truth)                            |
-| [lib/constants.ts](../lib/constants.ts)                                                                                         | Limits, API settings, storage key                                                  |
-| [lib/gemini.ts](../lib/gemini.ts)                                                                                               | `PlanGenerator`: Gemini call, JSON parsing, retry, error mapping                   |
-| [lib/prompts.ts](../lib/prompts.ts)                                                                                             | System and user prompt builders                                                    |
-| [lib/api/](../lib/api)                                                                                                          | `createPlanRoute` pipeline and route dependencies                                  |
-| [lib/http.ts](../lib/http.ts), [lib/rateLimit.ts](../lib/rateLimit.ts), [lib/logger.ts](../lib/logger.ts)                       | Body reading, response helpers, limiter, JSON logs                                 |
-| [lib/workspace.ts](../lib/workspace.ts), [lib/workspaceStore.ts](../lib/workspaceStore.ts), [lib/storage.ts](../lib/storage.ts) | Client state                                                                       |
-| [proxy.ts](../proxy.ts), [next.config.ts](../next.config.ts)                                                                    | CSP nonce and security headers                                                     |
-| [instrumentation.ts](../instrumentation.ts)                                                                                     | Validates `GEMINI_API_KEY` when the Node.js server starts                          |
+| Path                                                                                                                            | Responsibility                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [app/](../app)                                                                                                                  | Routes: `/` intake, `/plan` workspace, `/plan/summary`, `/api/plan`, `/api/refine`                                                                                                |
+| [components/](../components)                                                                                                    | Feature components; their parts live in `intake/`, `budget/`, `timeline/`, `workspace/`, `summary/`, `refine/`; [ui/](../components/ui) holds primitives, icons and shared styles |
+| [lib/schema.ts](../lib/schema.ts), [lib/intakeSchema.ts](../lib/intakeSchema.ts)                                                | Zod schemas and inferred types (single source of truth)                                                                                                                           |
+| [lib/constants.ts](../lib/constants.ts)                                                                                         | Limits, API settings, storage key                                                                                                                                                 |
+| [lib/gemini.ts](../lib/gemini.ts)                                                                                               | `PlanGenerator`: Gemini call, JSON parsing, retry, error mapping                                                                                                                  |
+| [lib/prompts.ts](../lib/prompts.ts)                                                                                             | System and user prompt builders                                                                                                                                                   |
+| [lib/api/](../lib/api)                                                                                                          | `createPlanRoute` pipeline and route dependencies                                                                                                                                 |
+| [lib/http.ts](../lib/http.ts), [lib/rateLimit.ts](../lib/rateLimit.ts), [lib/logger.ts](../lib/logger.ts)                       | Body reading, response helpers, limiter, JSON logs                                                                                                                                |
+| [lib/workspace.ts](../lib/workspace.ts), [lib/workspaceStore.ts](../lib/workspaceStore.ts), [lib/storage.ts](../lib/storage.ts) | Client state                                                                                                                                                                      |
+| [proxy.ts](../proxy.ts), [next.config.ts](../next.config.ts)                                                                    | CSP nonce and security headers                                                                                                                                                    |
+| [instrumentation.ts](../instrumentation.ts)                                                                                     | Validates `GEMINI_API_KEY` when the Node.js server starts                                                                                                                         |
 
 ## Request flow (`POST /api/plan`, `POST /api/refine`)
 
@@ -77,7 +77,7 @@ workspaceStore (lib/workspaceStore.ts)
      reducer(before.workspace, action)  (lib/workspace.ts, pure)
      unchanged -> return
      else snapshot = next
-          workspace ? saveWorkspace : clearWorkspace  -> localStorage "eventcraft.plan.v1"
+          workspace ? saveWorkspace : clearWorkspace  -> localStorage "eventcraft.plan.v2"
           notify listeners
      |
      v
@@ -95,7 +95,7 @@ Reducer actions: `replace`, `setAmount`, `toggleVendor`, `applyPlan` (stores the
 
 ## Data model
 
-`StoredWorkspace` = `{ version: 1, intake, plan, previousPlan | null, savedAt }`. A `Plan` has
+`StoredWorkspace` = `{ version: 2, intake, plan, previousPlan | null, savedAt }`. A `Plan` has
 `summary`, `budget` (3-15 lines), `timeline` (4-25 milestones in phases `planning`, `booking`,
 `final-prep`, `event-day`), `vendors` (3-15, up to 5 questions each, `booked`) and `ideas` (3-10).
 Items carry a UUID `id`. The model never produces ids or `booked`; the server adds them.

@@ -13,7 +13,7 @@ export const NavLink = ({ href, children }: NavLinkProps): ReactElement => {
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className="rounded px-2 py-1 hover:bg-brand-soft aria-[current=page]:font-semibold aria-[current=page]:underline"
+      className="flex min-h-11 items-center rounded-lg px-3 font-medium text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink aria-[current=page]:bg-brand-soft aria-[current=page]:font-semibold aria-[current=page]:text-brand"
     >
       {children}
     </Link>

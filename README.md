@@ -1,18 +1,37 @@
 # EventCraft
 
-EventCraft is a planning assistant for weddings, birthdays and community events. You describe the event (type, name, date, guest count, budget, currency, location, vibe and must-haves) and Gemini 2.5 Flash returns a structured plan: a budget breakdown, a dated timeline, a vendor checklist with questions to ask, and ideas that cite which part of your brief inspired them. You can edit amounts, tick vendors off, ask the model to revise the plan in natural language (with one-step undo), and export the result as JSON or print it. The Gemini key is only ever used on the server; the plan itself lives in your browser's localStorage.
+Live: https://eventcraft-lac.vercel.app
+
+EventCraft is a planning assistant for weddings, birthdays and community events. You describe the event (type and type-specific details, name, date, guest count, budget, currency, location, vibe and must-haves) and Gemini 2.5 Flash returns a structured plan: a budget breakdown, a dated timeline of checkable milestones, a vendor checklist with questions to ask, and ideas that cite which part of your brief inspired them. You can edit budget lines and the total, tick milestones and vendors off, ask the model to revise the plan in natural language (with one-step undo), and export the result as JSON or print it. The Gemini key is only ever used on the server; the plan itself lives in your browser's localStorage.
 
 ## Features
 
-| Problem-statement clause              | What it does                                                                                                                  | Implemented in                                                                                                                                                                                                            |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Weddings, birthdays, community events | Event type chosen on the intake form; each type has its own planning guidance in the prompt                                   | [components/IntakeForm.tsx](components/IntakeForm.tsx), [lib/constants.ts](lib/constants.ts) (`EVENT_TYPES`), [lib/prompts.ts](lib/prompts.ts) (`EVENT_GUIDANCE`)                                                         |
-| Budgets                               | Per-category allocations with rationale, editable amounts, live "allocated vs total" progress and an "Over budget" warning    | [components/BudgetTable.tsx](components/BudgetTable.tsx), [lib/budget.ts](lib/budget.ts)                                                                                                                                  |
-| Timelines                             | Milestones grouped by phase (planning, booking, final-prep, event-day) and shown with real dates computed from the event date | [components/Timeline.tsx](components/Timeline.tsx), [lib/budget.ts](lib/budget.ts) (`groupMilestonesByPhase`), [lib/format.ts](lib/format.ts)                                                                             |
-| Vendor checklists                     | Vendors with why-needed, questions to ask, and a booked checkbox with progress                                                | [components/VendorChecklist.tsx](components/VendorChecklist.tsx)                                                                                                                                                          |
-| Personalised ideas                    | Ideas that each name the intake detail that inspired them                                                                     | [components/IdeasList.tsx](components/IdeasList.tsx), [lib/prompts.ts](lib/prompts.ts)                                                                                                                                    |
-| Refine loop                           | Free-text instruction sends intake + current plan to the model; booked vendors are carried over by category; one-step undo    | [components/RefinePanel.tsx](components/RefinePanel.tsx), [app/api/refine/route.ts](app/api/refine/route.ts), [lib/plan.ts](lib/plan.ts) (`mergeRefinedPlan`, `diffPlans`), [lib/workspace.ts](lib/workspace.ts) (`undo`) |
-| Keep and share the result             | Printable summary, JSON export, start over                                                                                    | [components/PlanSummary.tsx](components/PlanSummary.tsx)                                                                                                                                                                  |
+- Intake form with type-specific fields: couple names and ceremony style (wedding), guest of honour and age (birthday), admission type and permit need (community).
+- Budget table with editable amounts and total, add and remove lines, and a live allocated-versus-total status with an over-budget warning.
+- Timeline grouped by phase with real dates, completion checkboxes, progress, "Overdue" and "Due this week" badges, and a "Next up" card.
+- Vendor checklist with why-needed, questions to ask, a booked checkbox and progress.
+- Ideas that each name the intake detail that inspired them.
+- Refine panel: a free-text instruction revises the whole plan; booked vendors and completed milestones are carried over; one-step undo.
+- Printable summary, JSON export and start over.
+
+## Problem statement coverage
+
+The brief: "Create a GenAI-powered planning assistant that helps users organize weddings, birthdays, and community events with budgets, timelines, vendor checklists, and personalized ideas."
+
+| Clause                                 | What the user sees                                                                                                                                                                                                    | Implemented in                                                                                                                                                                                                                                                         |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GenAI-powered                          | The plan is generated by Gemini 2.5 Flash from the intake; output is schema-constrained JSON, validated, retried once if malformed, with deterministic guards applied after it                                        | [lib/gemini.ts](lib/gemini.ts), [lib/prompts.ts](lib/prompts.ts), [lib/schema.ts](lib/schema.ts), [lib/plan.ts](lib/plan.ts) (`fitPlanToIntake`), [app/api/plan/route.ts](app/api/plan/route.ts)                                                                       |
+| Weddings                               | Wedding option with couple names and ceremony style; the prompt shapes ceremony, rituals, attire, music and vendors around them                                                                                       | [components/IntakeForm.tsx](components/IntakeForm.tsx), [lib/intakeSchema.ts](lib/intakeSchema.ts), [lib/prompts.ts](lib/prompts.ts) (`eventGuidance`), [components/EventFacts.tsx](components/EventFacts.tsx)                                                         |
+| Birthdays                              | Birthday option with guest of honour and age; the prompt picks activities, food and safety measures for that age and weights the budget toward food, entertainment and decor                                          | [components/IntakeForm.tsx](components/IntakeForm.tsx), [lib/intakeSchema.ts](lib/intakeSchema.ts), [lib/prompts.ts](lib/prompts.ts) (`eventGuidance`), [components/EventFacts.tsx](components/EventFacts.tsx)                                                         |
+| Community events                       | Community option with free or ticketed admission and permit need; the prompt adds ticketing or sponsor planning and a permit milestone when one is required                                                           | [components/IntakeForm.tsx](components/IntakeForm.tsx), [lib/intakeSchema.ts](lib/intakeSchema.ts), [lib/prompts.ts](lib/prompts.ts) (`ADMISSION_GUIDANCE`, `permitGuidance`)                                                                                          |
+| Budgets                                | Per-category allocations with rationale, editable amounts and total, add and remove lines, allocated-versus-total status and an "Over budget" warning; model output is scaled to fit the total                        | [components/BudgetTable.tsx](components/BudgetTable.tsx), [lib/budget.ts](lib/budget.ts), [lib/plan.ts](lib/plan.ts) (`fitBudgetToTotal`), [lib/workspace.ts](lib/workspace.ts)                                                                                        |
+| Timelines                              | Milestones grouped by phase (planning, booking, final prep, event day) with real dates counted back from the event date, completion checkboxes, progress and due badges; lead times are clamped to the days remaining | [components/Timeline.tsx](components/Timeline.tsx), [components/NextUpCard.tsx](components/NextUpCard.tsx), [lib/budget.ts](lib/budget.ts) (`groupMilestonesByPhase`, `nextMilestone`), [lib/format.ts](lib/format.ts), [lib/plan.ts](lib/plan.ts) (`clampMilestones`) |
+| Vendor checklists                      | Vendors suited to the event type, location and guest count, each with why it is needed, questions to ask and a booked checkbox with progress                                                                          | [components/VendorChecklist.tsx](components/VendorChecklist.tsx), [lib/budget.ts](lib/budget.ts) (`toggleVendor`, `vendorProgress`), [lib/prompts.ts](lib/prompts.ts)                                                                                                  |
+| Personalised ideas                     | Ideas that each state which intake detail inspired them, shown as "Inspired by"                                                                                                                                       | [components/IdeasList.tsx](components/IdeasList.tsx), [lib/prompts.ts](lib/prompts.ts), [lib/schema.ts](lib/schema.ts) (`inspiredBy`)                                                                                                                                  |
+| Helps users organise: edit             | Edit amounts, the total budget, budget lines, milestone completion and vendor booking directly                                                                                                                        | [components/BudgetTable.tsx](components/BudgetTable.tsx), [components/Timeline.tsx](components/Timeline.tsx), [components/VendorChecklist.tsx](components/VendorChecklist.tsx), [lib/workspace.ts](lib/workspace.ts)                                                   |
+| Helps users organise: refine           | Free-text instruction revises the plan; booked vendors and completed milestones carry over; one-step undo                                                                                                             | [components/RefinePanel.tsx](components/RefinePanel.tsx), [app/api/refine/route.ts](app/api/refine/route.ts), [lib/plan.ts](lib/plan.ts) (`mergeRefinedPlan`, `diffPlans`), [lib/workspace.ts](lib/workspace.ts) (`undo`)                                              |
+| Helps users organise: persist          | The plan survives reloads and is validated when read back                                                                                                                                                             | [lib/workspaceStore.ts](lib/workspaceStore.ts), [lib/storage.ts](lib/storage.ts), [lib/schema.ts](lib/schema.ts) (`StoredWorkspaceSchema`), [components/PlanWorkspace.tsx](components/PlanWorkspace.tsx)                                                               |
+| Helps users organise: print and export | Read-only summary that prints with every vendor's questions expanded, plus JSON export and start over                                                                                                                 | [components/PlanSummary.tsx](components/PlanSummary.tsx), [lib/schema.ts](lib/schema.ts)                                                                                                                                                                               |
 
 Routes: `/` (intake), `/plan` (workspace with Budget, Timeline, Vendors and Ideas tabs plus the refine panel), `/plan/summary` (read-only printable view), `POST /api/plan`, `POST /api/refine`.
 
@@ -42,7 +61,7 @@ Browser validates the response again (PlanSchema in lib/client.ts)
   v
 Client store (lib/workspaceStore.ts + lib/workspace.ts reducer, read through useSyncExternalStore)
   v
-localStorage key "eventcraft.plan.v1" (lib/storage.ts, validated with StoredWorkspaceSchema on read)
+localStorage key "eventcraft.plan.v2" (lib/storage.ts, validated with StoredWorkspaceSchema on read)
 ```
 
 Failures map to HTTP status codes: 400 validation or invalid JSON, 413 body too large, 415 wrong content type, 429 rate limited (with `Retry-After`), 502 upstream or malformed model output, 504 timeout, 500 unexpected. Every response carries a correlation id (`X-Request-Id` header and `correlationId` in error bodies).
@@ -61,12 +80,11 @@ Versions are the exact pins from [package.json](package.json).
 
 ## Setup
 
-Requires Node.js 20 or newer (`engines.node` is `>=20`; CI uses Node 22).
+Requires Node.js 22.12 or newer (`engines.node` is `>=22.12.0`; CI uses Node 22).
 
 ```bash
 npm ci
-cp .env.example .env.local
-# edit .env.local and set GEMINI_API_KEY (create a key in Google AI Studio)
+# create .env.local containing a single line: GEMINI_API_KEY=<your key from Google AI Studio>
 npm run dev
 ```
 
@@ -82,7 +100,7 @@ Open http://localhost:3000. The server refuses to start without `GEMINI_API_KEY`
 | `npm run lint`         | `eslint . --max-warnings 0`                            | Lint, zero warnings allowed                            |
 | `npm run format`       | `prettier --check .`                                   | Verify formatting                                      |
 | `npm run format:write` | `prettier --write .`                                   | Apply formatting                                       |
-| `npm run typecheck`    | `tsc --noEmit`                                         | Type check                                             |
+| `npm run typecheck`    | `next typegen && tsc --noEmit`                         | Generate route types, then type check                  |
 | `npm run test`         | `vitest run --coverage`                                | Unit, API and component tests with coverage thresholds |
 | `npm run test:watch`   | `vitest`                                               | Watch mode                                             |
 | `npm run test:e2e`     | `playwright test`                                      | End-to-end and accessibility tests                     |
@@ -91,7 +109,7 @@ Open http://localhost:3000. The server refuses to start without `GEMINI_API_KEY`
 
 ## Testing strategy
 
-- **Unit and API (Vitest, jsdom)**: `tests/unit/**` for pure logic (schema, budget maths, plan merging and diffing, formatting, prompts, rate limiter, storage) and `tests/api/**` for the route handler. Coverage is measured with V8 over `lib/**`, `components/**` and `app/api/**`, and `vitest.config.ts` fails the run below 95% lines, 90% branches, 95% functions and 95% statements.
+- **Unit and API (Vitest, jsdom)**: `tests/unit/**` for pure logic (schema, budget maths, plan merging and diffing, formatting, prompts, rate limiter, storage) and `tests/api/**` for the route handler. Coverage is measured with V8 over `lib/**`, `components/**` and `app/api/**`, and `vitest.config.ts` fails the run below 95% lines, 90% branches, 95% functions and 95% statements overall, and below 100% for each of those metrics under `lib/**`.
 - **Components (Vitest + Testing Library)**: `tests/components/**` render the budget table, vendor checklist, ideas list, refine panel and UI primitives and interact with them as a user would.
 - **End to end (Playwright)**: `tests/e2e/**` runs against a production build (`npm run build && next start -p 3100`, configured in [playwright.config.ts](playwright.config.ts)) on two projects, desktop Chrome and a Pixel 7 emulation.
   - `planning.spec.ts`: intake validation, happy path (tabs by click and ArrowRight, vendor progress, over-budget warning, persistence across reload), refine and undo, summary (read-only, JSON export, start over), API error handling, empty state.
@@ -105,9 +123,9 @@ Open http://localhost:3000. The server refuses to start without `GEMINI_API_KEY`
 - **Env validation at startup**: [instrumentation.ts](instrumentation.ts) calls `readEnv()` when the Node.js runtime registers, so a missing key fails fast.
 - **Strict Zod at every boundary**: request bodies (`IntakeSchema`, `RefineRequestSchema`), model output (`GeneratedPlanSchema`), the API response as read by the browser (`PlanSchema`) and the stored workspace (`StoredWorkspaceSchema`). Object schemas are `.strict()` and text fields have length limits ([lib/constants.ts](lib/constants.ts) `LIMITS`).
 - **Body size limit**: 32,768 bytes, checked against `Content-Length` and again on the actual text ([lib/http.ts](lib/http.ts)); non-JSON content types get 415.
-- **Rate limiting**: token bucket per client key (capacity 10, refill 0.2 per second) in [lib/rateLimit.ts](lib/rateLimit.ts); 429 with `Retry-After`.
-- **CSP with a per-request nonce**: [proxy.ts](proxy.ts) builds `default-src 'self'`, nonce plus `'strict-dynamic'` script policy, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'` and `connect-src 'self'` (`'unsafe-eval'` only in development).
-- **Security headers**: [next.config.ts](next.config.ts) sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy`, and disables `X-Powered-By`.
+- **Rate limiting**: token bucket per client key (capacity 10, refill 0.2 per second) in [lib/rateLimit.ts](lib/rateLimit.ts); 429 with `Retry-After`. The key is the right-most `x-forwarded-for` hop (appended by the platform proxy), falling back to `x-real-ip` ([lib/http.ts](lib/http.ts)); the bucket map is capped at 10,000 keys with least-recently-used eviction.
+- **CSP with a per-request nonce**: [proxy.ts](proxy.ts) builds `default-src 'self'`, a nonce plus `'strict-dynamic'` script policy, a nonce-based `style-src`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'` and `connect-src 'self'` (`'unsafe-eval'` only in development).
+- **Security headers**: [next.config.ts](next.config.ts) sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (two years, `includeSubDomains`), `Cross-Origin-Opener-Policy`, and disables `X-Powered-By`.
 - **Prompt-injection mitigation**: [lib/prompts.ts](lib/prompts.ts) wraps user input in `<intake>`, `<current_plan>` and `<request>` tags and tells the model to treat the tagged content as data, not instructions. Output is constrained by a JSON schema and re-validated, so injected text can at worst change plan content, not shape or behaviour.
 - **No HTML rendering of model output**: all model text is rendered as React text nodes; there is no `dangerouslySetInnerHTML`.
 - **localStorage validated on read**: [lib/storage.ts](lib/storage.ts) parses with `StoredWorkspaceSchema` and removes the entry if it is corrupt or invalid.
@@ -118,7 +136,7 @@ Open http://localhost:3000. The server refuses to start without `GEMINI_API_KEY`
 Target: WCAG 2.2 AA.
 
 - Landmarks: skip link, `header`, `nav` ("Primary"), `main#main`, `footer` in [app/layout.tsx](app/layout.tsx); `lang="en"` on the document.
-- Skip link is the first focusable element and moves focus to the focusable `main` element.
+- Skip link is the first focusable element and moves focus to the focusable `main` element; each page has exactly one `h1`, which receives focus when the workspace or summary mounts.
 - Every control is labelled; form errors use `aria-invalid` and `aria-describedby` ([components/ui/Field.tsx](components/ui/Field.tsx)); after a failed submit focus moves to the error summary container at the top of the form.
 - Status messages use `role="status"` and `aria-live="polite"` (vendor progress, budget status, refine result, loading).
 - Tabs and checkboxes use Radix primitives, which provide arrow-key navigation and correct ARIA roles; tables have captions and header scopes.
@@ -126,16 +144,47 @@ Target: WCAG 2.2 AA.
 - `prefers-reduced-motion` is honoured in [app/globals.css](app/globals.css); a dark colour scheme is provided.
 - axe-core runs in the e2e suite (see Testing strategy).
 
+Keyboard-only walkthrough (production build, Chrome, 2026-10-28):
+
+1. The first Tab focuses "Skip to main content"; Enter moves focus to `main`.
+2. Tab reaches the event-type radio group; arrow keys switch the type and the matching detail fields appear in place.
+3. Tab then visits every field in visual order (name, type-specific details, date, guests, budget, currency, location, vibe, must-haves) and ends on "Generate plan"; each control shows the focus ring.
+4. Submitting with empty fields moves focus to the error summary, which is scrolled into view, and marks each invalid field with `aria-invalid`.
+5. In the workspace, arrow keys move between the Budget, Timeline, Vendors and Ideas tabs, and Space toggles milestone and vendor checkboxes; the Playwright suite asserts these steps on desktop and mobile viewports.
+
 ## Efficiency notes
 
-- Server components by default; client components (`"use client"`) only where interaction is needed: the intake form, workspace, tabs, budget table, vendor checklist, refine panel, summary actions and error boundary.
+- Server components by default; client components (`"use client"`) only where interaction is needed: the intake form, workspace and its tabs, budget table, timeline checklist, next-up card, vendor checklist, refine panel, summary page, active nav link and the error boundaries. The subcomponents in `components/intake/`, `components/budget/` and similar folders are rendered inside these boundaries.
 - One model call per user action (generate or refine); a second call happens only if the first response fails schema validation (`RETRIES_ON_MALFORMED = 1` in [lib/gemini.ts](lib/gemini.ts)).
-- Bounded cost: `maxOutputTokens` 8,192, thinking budget 512, request timeout 45 s, and list size caps in the schema.
+- Bounded cost: `maxOutputTokens` 16,384, thinking budget 512, request timeout 45 s, and list size caps in the schema.
 - State lives in a small external store read with `useSyncExternalStore`; persistence is a single localStorage write per change.
+- Client JavaScript for all routes totals 241 KiB gzipped (17 chunks, measured from `.next/static` after `next build`). The Gemini SDK and the API key never reach the browser: the server-only modules import `server-only`, and a scan of the built chunks finds no `@google/genai` or `GEMINI_API_KEY`.
+- Zod runs in `jitless` mode ([lib/zod.ts](lib/zod.ts)) so its `new Function` capability probe never trips the nonce CSP.
+
+Lighthouse 12.8 against the local production build (`next start`), 2026-10-28:
+
+| Page            | Mode    | Performance | Accessibility | Best practices | SEO | LCP   | TBT   | CLS | Transfer |
+| --------------- | ------- | ----------- | ------------- | -------------- | --- | ----- | ----- | --- | -------- |
+| `/`             | Mobile  | 97          | 100           | 100            | 100 | 2.5 s | 20 ms | 0   | 247 KiB  |
+| `/`             | Desktop | 100         | 100           | 100            | 100 | 0.6 s | 0 ms  | 0   | 247 KiB  |
+| `/plan`         | Mobile  | 97          | 100           | 100            | 63  | 2.6 s | 20 ms | 0   | 261 KiB  |
+| `/plan`         | Desktop | 100         | 100           | 100            | 63  | 0.5 s | 0 ms  | 0   | 260 KiB  |
+| `/plan/summary` | Mobile  | 99          | 100           | 100            | 63  | 2.0 s | 10 ms | 0   | 254 KiB  |
+| `/plan/summary` | Desktop | 100         | 100           | 100            | 63  | 0.6 s | 0 ms  | 0   | 254 KiB  |
+
+The SEO score on `/plan` and `/plan/summary` reflects their deliberate `noindex, nofollow` robots metadata: they only show data held in the visitor's own browser.
+
+## Deployment
+
+The app is hosted on Vercel at https://eventcraft-lac.vercel.app.
+
+- `GEMINI_API_KEY` is configured as a sensitive Production environment variable in the Vercel project; it is never committed.
+- The GitHub repository is connected to the Vercel project: every push to `main` deploys to production, and every other branch gets a preview deployment.
+- CI in [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the quality gates on every push and pull request: lint, formatting, type check, unit tests with coverage, knip and the production build, plus the Playwright end-to-end and accessibility suite.
 
 ## Known limitations
 
-- The rate limiter is in memory, so each server instance has its own counters and they reset on restart. A shared store (for example Redis) would be needed for multi-instance deployments.
+- The rate limiter is in memory, so each server instance has its own counters and they reset on restart. On Vercel, each serverless instance keeps separate counters, so the effective limit is per instance rather than global. A shared store (for example Redis) would be needed for a global limit.
 - Plans are stored only in the browser's localStorage: no accounts, no sync across devices, cleared with site data. One plan at a time and one level of undo.
 - The UI is English only, and currency and date formatting use fixed locales per currency.
-- `npm audit` (all dependencies) reports 5 high-severity advisories that come through the `eslint-config-next` dev dependency (`@next/eslint-plugin-next` to `fast-glob` to `micromatch`). `npm audit --omit=dev` reports 0 vulnerabilities, because this tooling is not part of the production bundle. This was checked with `npm audit` on 2026-10-22.
+- `npm audit` and `npm audit --omit=dev` both report 0 vulnerabilities, checked on 2026-10-28.

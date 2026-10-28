@@ -1,46 +1,56 @@
 @import "tailwindcss";
 
+/* Every text/background pair below meets WCAG AA 4.5:1; --control and --brand meet 3:1 as UI boundaries. */
 :root {
-  --surface: #fbf8f3;
+  --surface: #f7f8fa;
   --surface-raised: #ffffff;
-  --ink: #1f1a17;
-  --ink-muted: #5c544e;
-  --line: #d9d1c7;
-  --control: #8c8178;
-  --brand: #8a3b2a;
-  --brand-strong: #6e2d1f;
-  --brand-soft: #f6e4de;
-  --danger: #a3261f;
-  --danger-soft: #fbe5e3;
-  --success: #246b3a;
-  --success-soft: #e2f2e6;
-  --warning: #7a4e00;
-  --warning-soft: #fff1d6;
+  --surface-muted: #eef0f4;
+  --ink: #0f1729;
+  --ink-muted: #4a5468;
+  --line: #e3e6ec;
+  --control: #7a8397;
+  --brand: #4f46e5;
+  --brand-strong: #4338ca;
+  --brand-soft: #eef0ff;
+  --on-brand: #ffffff;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --success: #067647;
+  --success-soft: #ecfdf3;
+  --warning: #93370d;
+  --warning-soft: #fffaeb;
+  --glow: rgb(79 70 229 / 0.09);
+  --shadow-color: rgb(15 23 41 / 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface: #17120f;
-    --surface-raised: #221b17;
-    --ink: #f3ece4;
-    --ink-muted: #bdb2a7;
-    --line: #3d322c;
-    --control: #7d6f65;
-    --brand: #f0a68f;
-    --brand-strong: #f6c2b2;
-    --brand-soft: #3a211b;
-    --danger: #ff9f98;
-    --danger-soft: #3f1c1a;
-    --success: #8fd9a4;
-    --success-soft: #1b3323;
-    --warning: #ffd27a;
-    --warning-soft: #3a2b0f;
+    --surface: #0b0d12;
+    --surface-raised: #14171f;
+    --surface-muted: #1b1f29;
+    --ink: #eceef3;
+    --ink-muted: #a1a9b8;
+    --line: #262b36;
+    --control: #69728a;
+    --brand: #8b8cff;
+    --brand-strong: #a9abff;
+    --brand-soft: #1f2045;
+    --on-brand: #0b0d12;
+    --danger: #ff8a80;
+    --danger-soft: #2c1517;
+    --success: #4ade94;
+    --success-soft: #0f2a1d;
+    --warning: #fbbf4d;
+    --warning-soft: #2b200b;
+    --glow: rgb(139 140 255 / 0.12);
+    --shadow-color: rgb(0 0 0 / 0.4);
   }
 }
 
 @theme inline {
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
+  --color-surface-muted: var(--surface-muted);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-line: var(--line);
@@ -48,12 +58,14 @@
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
   --color-brand-soft: var(--brand-soft);
+  --color-on-brand: var(--on-brand);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --shadow-card: 0 1px 2px var(--shadow-color), 0 4px 16px -4px var(--shadow-color);
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
 }
 
@@ -61,19 +73,64 @@ html {
   color-scheme: light dark;
 }
 
+/* Keeps focused elements clear of the sticky header. */
+@media (min-width: 40rem) {
+  html {
+    scroll-padding-top: 5rem;
+  }
+}
+
 body {
-  background: var(--surface);
+  background:
+    radial-gradient(56rem 28rem at 50% -8rem, var(--glow), transparent 70%) no-repeat,
+    var(--surface);
   color: var(--ink);
   font-family: var(--font-sans);
 }
 
+::selection {
+  background: var(--brand-soft);
+  color: var(--ink);
+}
+
 :focus-visible {
-  outline: 3px solid var(--brand);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
 progress {
+  appearance: none;
+  height: 0.5rem;
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--surface-muted);
   accent-color: var(--brand);
+}
+
+progress::-webkit-progress-bar {
+  background: var(--surface-muted);
+  border-radius: 9999px;
+}
+
+progress::-webkit-progress-value {
+  background: var(--brand);
+  border-radius: 9999px;
+  transition: width 300ms ease;
+}
+
+progress::-moz-progress-bar {
+  background: var(--brand);
+  border-radius: 9999px;
+}
+
+details > summary {
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -89,13 +146,26 @@ progress {
   :root {
     --surface: #fff;
     --surface-raised: #fff;
+    --surface-muted: #fff;
     --ink: #000;
     --ink-muted: #333;
-    --brand: #6e2d1f;
     --line: #999;
+    --control: #666;
+    --brand: #000;
+    --brand-soft: #fff;
+    --on-brand: #fff;
+    --danger: #000;
+    --danger-soft: #fff;
+    --success: #000;
+    --success-soft: #fff;
+    --warning: #000;
+    --warning-soft: #fff;
   }
   .print-hidden {
     display: none !important;
+  }
+  * {
+    box-shadow: none !important;
   }
   body {
     background: #fff;
