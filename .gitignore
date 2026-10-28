@@ -47,4 +47,6 @@ next-env.d.ts
 
 # local assistant context
 CLAUDE.local.md
+CLAUDE.md
+AGENTS.md
 .claude/
