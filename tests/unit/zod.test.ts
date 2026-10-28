@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vitest";
+
 import { config } from "zod";
 
 import "@/lib/zod";

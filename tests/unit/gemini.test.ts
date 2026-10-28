@@ -11,6 +11,7 @@ import {
 } from "@/lib/gemini";
 import { createLogger } from "@/lib/logger";
 
+import { FIXED_NOW } from "./clock";
 import { makeGeneratedPlan, makeIntake, makePlan } from "./fixtures";
 
 type Generate = ModelClient["models"]["generateContent"];
@@ -270,7 +271,7 @@ describe("createPlanGenerator defaults", () => {
       models: { generateContent },
     } as unknown as ModelClient);
     await generator.generate(makeIntake(), context());
-    const today = new Date().toISOString().slice(0, 10);
+    const today = FIXED_NOW.toISOString().slice(0, 10);
     expect(generateContent.mock.calls[0]?.[0].contents as string).toContain(`"Today":"${today}"`);
     expect(write).toHaveBeenCalledWith(expect.stringContaining('"message":"model call"'));
     write.mockRestore();

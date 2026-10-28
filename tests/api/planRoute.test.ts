@@ -47,10 +47,7 @@ const call = (
     }),
   );
 
-const valid = () =>
-  JSON.stringify(
-    makeIntake({ eventDate: new Date(Date.now() + 864e5 * 30).toISOString().slice(0, 10) }),
-  );
+const valid = () => JSON.stringify(makeIntake());
 
 beforeEach(() => {
   generate.mockReset();

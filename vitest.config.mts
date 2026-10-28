@@ -2,6 +2,13 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
+const DOM_TESTS = [
+  "tests/components/**/*.test.tsx",
+  "tests/unit/storage.test.ts",
+  "tests/unit/workspaceStore.test.ts",
+  "tests/unit/zod.test.ts",
+];
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -12,12 +19,26 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: "jsdom",
-    setupFiles: ["./vitest.setup.ts"],
-    include: [
-      "tests/unit/**/*.test.ts",
-      "tests/components/**/*.test.tsx",
-      "tests/api/**/*.test.ts",
+    setupFiles: ["./tests/setup.ts"],
+    restoreMocks: true,
+    unstubGlobals: true,
+    unstubEnvs: true,
+    expect: { requireAssertions: true },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "node",
+          setupFiles: ["./tests/setup.ts", "./tests/setup.clock.ts"],
+          environment: "node",
+          include: ["tests/unit/**/*.test.ts", "tests/api/**/*.test.ts"],
+          exclude: DOM_TESTS,
+        },
+      },
+      {
+        extends: true,
+        test: { name: "dom", environment: "jsdom", include: DOM_TESTS },
+      },
     ],
     coverage: {
       provider: "v8",
@@ -28,7 +49,7 @@ export default defineConfig({
         functions: 100,
         statements: 100,
       },
-      reporter: ["text", "html"],
+      reporter: ["text", "html", "lcov", "json-summary"],
     },
   },
 });

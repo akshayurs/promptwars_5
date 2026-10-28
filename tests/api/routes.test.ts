@@ -36,7 +36,8 @@ const request = (url: string, body: unknown): Request =>
     headers: { "content-type": "application/json" },
   });
 
-const futureDate = new Date(Date.now() + 864e5 * 30).toISOString().slice(0, 10);
+// Thirty days after the fixed test clock.
+const SOON = "2029-07-01";
 
 beforeEach(() => {
   generate.mockReset();
@@ -46,9 +47,7 @@ beforeEach(() => {
 describe("app/api/plan route", () => {
   it("exports a POST that generates a plan", async () => {
     generate.mockResolvedValue(makeGeneratedPlan());
-    const res = await planPost(
-      request("http://localhost/api/plan", makeIntake({ eventDate: futureDate })),
-    );
+    const res = await planPost(request("http://localhost/api/plan", makeIntake()));
     expect(res.status).toBe(200);
     expect(PlanSchema.safeParse(await res.json()).success).toBe(true);
   });
@@ -63,10 +62,7 @@ describe("app/api/plan route", () => {
   it("scales an over-budget plan and clamps unreachable milestones", async () => {
     generate.mockResolvedValue(makeGeneratedPlan());
     const res = await planPost(
-      request(
-        "http://localhost/api/plan",
-        makeIntake({ eventDate: futureDate, totalBudget: 200_000 }),
-      ),
+      request("http://localhost/api/plan", makeIntake({ eventDate: SOON, totalBudget: 200_000 })),
     );
     const json = PlanSchema.parse(await res.json());
     expect(json.budget.map((line) => line.amount)).toEqual([100_000, 75_000, 25_000]);
@@ -100,7 +96,7 @@ describe("app/api/refine route", () => {
     refine.mockResolvedValue(makeGeneratedPlan());
     const res = await refinePost(
       request("http://localhost/api/refine", {
-        intake: makeIntake({ eventDate: futureDate, totalBudget: 40_000 }),
+        intake: makeIntake({ eventDate: SOON, totalBudget: 40_000 }),
         plan: makePlan(),
         instruction: "Tighten everything",
       }),

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { requestPlan, requestRefinement } from "@/lib/client";
 
@@ -10,22 +10,26 @@ const stubFetch = (impl: () => Promise<Response>) => {
   return fetchMock;
 };
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("requestPlan", () => {
   it("returns a parsed plan on success and posts JSON", async () => {
     const plan = makePlan();
     const fetchMock = stubFetch(() => Promise.resolve(Response.json(plan)));
-    const result = await requestPlan(makeIntake(), new AbortController().signal);
+    const intake = makeIntake();
+    const signal = new AbortController().signal;
+    const result = await requestPlan(intake, signal);
     expect(result).toEqual({ ok: true, value: plan });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/plan");
+    expect(fetchMock).toHaveBeenCalledWith("/api/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(intake),
+      signal,
+    });
   });
 
-  it("works without a signal", async () => {
-    stubFetch(() => Promise.resolve(Response.json(makePlan())));
+  it("works without a signal and omits it from the request", async () => {
+    const fetchMock = stubFetch(() => Promise.resolve(Response.json(makePlan())));
     expect((await requestPlan(makeIntake())).ok).toBe(true);
+    expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty("signal");
   });
 
   it("maps server validation issues to a field map", async () => {
@@ -83,12 +87,16 @@ describe("requestRefinement", () => {
   it("posts to /api/refine", async () => {
     const plan = makePlan();
     const fetchMock = stubFetch(() => Promise.resolve(Response.json(plan)));
-    const result = await requestRefinement(
-      { intake: makeIntake(), plan, instruction: "Change it" },
-      new AbortController().signal,
-    );
+    const body = { intake: makeIntake(), plan, instruction: "Change it" };
+    const signal = new AbortController().signal;
+    const result = await requestRefinement(body, signal);
     expect(result.ok).toBe(true);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/refine");
+    expect(fetchMock).toHaveBeenCalledWith("/api/refine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    });
   });
 
   it("works without a signal", async () => {

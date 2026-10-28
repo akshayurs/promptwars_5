@@ -21,7 +21,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "types": [],
     "plugins": [{ "name": "next" }],
     "paths": { "@/*": ["./*"] }
   },
@@ -32,5 +32,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "coverage", "playwright-report", "test-results"]
+  "exclude": ["node_modules", "coverage", "playwright-report", "test-results", "tests"]
 }

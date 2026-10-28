@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { readEnv } from "@/lib/env";
 
@@ -15,18 +15,16 @@ describe("readEnv", () => {
     expect(readEnv({ GEMINI_API_KEY: " test-key " })).toEqual({ GEMINI_API_KEY: "test-key" });
   });
 
-  it("does not leak the value in errors", () => {
-    expect(() => readEnv({ GEMINI_API_KEY: "" })).not.toThrow(/test-key/);
+  it("throws a fixed message that never echoes the rejected value", () => {
+    const rejected = { GEMINI_API_KEY: 987654321 } as unknown as Record<string, string>;
+    expect(() => readEnv(rejected)).toThrow(
+      "Missing configuration: set the GEMINI_API_KEY environment variable.",
+    );
+    expect(() => readEnv(rejected)).not.toThrow(/987654321/);
   });
 
   it("reads process.env by default", () => {
-    const original = process.env.GEMINI_API_KEY;
-    process.env.GEMINI_API_KEY = "fake-from-process";
-    try {
-      expect(readEnv().GEMINI_API_KEY).toBe("fake-from-process");
-    } finally {
-      if (original === undefined) delete process.env.GEMINI_API_KEY;
-      else process.env.GEMINI_API_KEY = original;
-    }
+    vi.stubEnv("GEMINI_API_KEY", "fake-from-process");
+    expect(readEnv().GEMINI_API_KEY).toBe("fake-from-process");
   });
 });
